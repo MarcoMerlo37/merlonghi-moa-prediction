@@ -9,6 +9,7 @@ This project addresses the Kaggle **Mechanisms of Action (MoA) Prediction** chal
 - Competition page: <https://www.kaggle.com/competitions/lish-moa>
 - Data: <https://www.kaggle.com/competitions/lish-moa/data>
 
+
 The solution is delivered as a **training** notebook, which cross-validates the models and saves them, and an **inference** notebook, which loads the saved models and produces the Kaggle submission (see [`software/`](merlonghi-moa-prediction/software/)). Around them sit three **tuning** notebooks, a **fold and compound diagnostics** notebook and three **offline analysis** notebooks, which document how the cross-validation protocol and the hyperparameters were investigated (see [Notebooks](#notebooks)). Two models were submitted to the Kaggle test set as late submissions: the first was trained with row-wise cross-validation and default hyperparameters (run R), the second with the compound-aware hybrid cross-validation and tuned hyperparameters (run H2) (see [Results](#results)).
 
 ### Data in brief
@@ -322,7 +323,7 @@ The row-wise submission (private score 0.01634) would rank approximately 1400th 
 ## Repository structure
 
 ```
-merlonghi-moa-prediction/
+Merlonghi-MoA-Prediction
 ├── README.md                             <- this file
 ├── software/
 │     ├── README.md                       <- setup / how-to-run instructions
