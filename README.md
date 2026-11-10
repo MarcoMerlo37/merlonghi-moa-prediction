@@ -39,7 +39,7 @@ All notebooks are in [`software/`](merlonghi-moa-prediction/software/); setup an
 |---|---|---|
 | [`moa-training.ipynb`](merlonghi-moa-prediction/software/moa-training.ipynb) | Training and cross-validation of ResNet, FT-Transformer and CatBoost under `CV_SCHEME` = `hybrid` (default), `grouped` or `row`; hyperparameters read from a JSON file (Step 1.5); nested-CV blend; per-target error analysis (Step 15.4) and CV-protocol diagnostics (Step 15.5) | 51 artifacts for inference, `submission.csv`, OOF predictions (`oof_*.npy`), fold and compound bookkeeping, per-target reports |
 | [`moa-inference.ipynb`](merlonghi-moa-prediction/software/moa-inference.ipynb) | Loads the saved artifacts and writes the Kaggle submission, no training; rebuilds the networks from `model_hyperparameters` in `metadata.json` | `submission.csv` |
-| [`moa-tuning.ipynb`](merlonghi-moa-prediction/software/moa-tuning.ipynb) | Tuning v1: single-stage Optuna search (30/15/10 trials for ResNet/FT-Transformer/CatBoost) on 5 row-wise folds; the objective is the mean over folds of the best validation loss measured on the validation fold itself | `best_hyperparameters.json` |
+| [`moa-tuning.ipynb`](merlonghi-moa-prediction/software/moa-tuning.ipynb) | Tuning v1: superseded version. It uses 80 PCA components for g- and 300 CatBoost iterations, unlike the final pipeline (50 and 250); its output was not used by any reported run. | `best_hyperparameters.json` |
 | [`moa-tuning-row.ipynb`](merlonghi-moa-prediction/software/moa-tuning-row.ipynb) | Tuning v2: two stages on row-wise folds. Search on fold 0 (25/15/15 trials, 10% inner split for early stopping, default configuration enqueued as trial 0), confirmation of the top 3 candidates and of the default on fold 1; a tuned model is adopted only if it beats the default on both folds by at least 5e-5 | `best_hyperparameters.json`, `tuning_report.json`, `trials_*.csv` |
 | [`moa-tuning-hybrid.ipynb`](merlonghi-moa-prediction/software/moa-tuning-hybrid.ipynb) | Tuning v3: v2 with compound-aware folds (outer folds and inner split built like the training notebook's hybrid protocol, own split seed), wider search spaces, a longer pruner warm-up, and a confirmation on fold 1 with three paired seeds. A candidate is adopted only if the mean gain on the confirmation fold is at least 1e-4 **and** it wins on more than half of the seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_*.csv` |
 | [`moa-fold-diagnostics.ipynb`](merlonghi-moa-prediction/software/moa-fold-diagnostics.ipynb) | CPU-only diagnostics of a compound-aware run from its saved OOF files: fold sizes and losses, the largest compounds, targets dominated by a single compound, simulation of the `HYBRID_MIN_ROWS` threshold, and decomposition of the gap between protocols by compound frequency (with a bootstrap over compounds) | printed tables |
@@ -52,10 +52,11 @@ All notebooks are in [`software/`](merlonghi-moa-prediction/software/); setup an
 | Run | CV protocol | Hyperparameters | Kaggle late submission |
 |---|---|---|---|
 | R | `row` (earlier revision of the code) | defaults | yes (private 0.01634, public 0.01865) |
+| H0 | `hybrid` | defaults | no |
 | H1 | `hybrid` | tuning v2 (row-wise folds) | no |
 | H2 | `hybrid` | tuning v3 (compound-aware folds) | yes (private 0.01643, public 0.01873) |
 
-The diagnostics notebook was applied to a further, earlier `hybrid` run (called H0 below; nested-blend OOF 0.01720). Its hyperparameters are not documented in this repository, so H0 is used only where explicitly mentioned.
+The diagnostics notebook was applied to a further, earlier `hybrid` run: called H0; nested-blend OOF 0.01720. Its hyperparameters are the same as run R (defaults)
 
 ## Approach summary
 
@@ -112,28 +113,11 @@ Three versions of the tuning notebook exist (see [Notebooks](#notebooks)). Their
 
 The v2 file is named `best_hyperparameters_hybrid.json` in the earlier Kaggle Dataset only because it was renamed after the run; **it was tuned on row-wise folds**. To avoid confusion, the file of v2 should be archived as `best_hyperparameters_rowtuned.json` and `best_hyperparameters_hybrid.json` reserved for the output of v3.
 
-Values used (defaults in the first column; H1 and H2 come from the JSON files, as printed by Step 1.5 of the training notebook):
-
-| Model | Parameter | Default | Run H1 | Run H2 |
-|---|---|---|---|---|
-| ResNet | learning rate | 1e-3 | 1.18e-3 | 2.67e-3 |
-| | dropout | 0.2 | 0.427 | 0.583 |
-| | weight decay | 1e-5 | 8.5e-6 | 2.66e-4 |
-| | hidden units | 512 | 768 | 768 |
-| | batch size | 256 | 128 | 512 |
-| FT-Transformer | learning rate | 1e-3 | 2.35e-3 | 1e-3 (default) |
-| | dropout | 0.2 | 0.063 | 0.2 (default) |
-| | weight decay | 1e-5 | 9.9e-6 | 1e-5 (default) |
-| | tokens / blocks / heads / batch | 64 / 2 / 4 / 64 | 64 / 2 / 4 / 64 | 64 / 2 / 4 / 64 |
-| CatBoost | depth | 5 | 4 | 4 |
-| | `l2_leaf_reg` | 3 | 19.0 | 56.0 |
-| | learning rate | 0.08 | 0.1034 | 0.1034 |
-| | `subsample` (Bernoulli) | – | 0.829 | 0.829 |
-| | iterations | 250 | 250 | 250 |
+The values used can be found in [Hyperparameters](/software/hyperparameters/), as three JSON files, each one showing the hyperparameter configurations for the three models. There is a table in the [README.md](/software/hyperparameters/README.md) that shows which tuning version or run corresponds to which file.
 
 Observations (they describe the searches, not a measured effect):
 - In v3 no FT-Transformer candidate beat the default on the confirmation fold, so the FT-Transformer of run H2 uses the default configuration.
-- CatBoost `learning_rate` and `subsample` are identical in H1 and C, which is consistent with the same seeded random draw of the sampler (`TPESampler(seed=42)`). `l2_leaf_reg` sits at the same quantile (0.983 on a log scale) of both search ranges ([1, 20] in v2 and [1, 60] in v3): the search did not locate an interior optimum for it, and the CatBoost OOF does not change (0.01782 in H1, 0.01783 in H2).
+- CatBoost `learning_rate` and `subsample` are identical in H1 and H2, which is consistent with the same seeded random draw of the sampler (`TPESampler(seed=42)`). `l2_leaf_reg` sits at the same quantile (0.983 on a log scale) of both search ranges ([1, 20] in v2 and [1, 60] in v3): the search did not locate an interior optimum for it, and the CatBoost OOF does not change (0.01782 in H1, 0.01783 in H2).
 - In v3, the ResNet dropout (0.583, range [0.1, 0.6]), batch size (512, the largest value) and learning rate (2.67e-3, range [3e-4, 3e-3]) lie at or near the upper bounds of the search space, so the optimum may lie outside it.
 
 ## Results
@@ -143,7 +127,7 @@ Observations (they describe the searches, not a measured effect):
 - Under the compound-aware `hybrid` CV the nested blend scores 0.01715 (run H2) and 0.01714 (run H1) against 0.01607 under the `row` CV (run R): +6.7%. The comparison is not controlled (different hyperparameters and code revision), see below.
 - Tuning does not change the hybrid result measurably: the blend of H2 differs from that of H1 by +1e-5, and no recombination of the OOF predictions of two hybrid runs improves on H2 by the 5e-5 threshold.
 - The two late submissions score within 1e-4 of each other on the private (0.01634 vs 0.01643) and on the public set (0.01865 vs 0.01873). The hybrid CV estimate is closer to the test score (private +5.3% against +11.8% for the row-wise estimate), not because the models are better.
-- The test set contains frequent compounds of the training set: at least five of the eight analysed appear at about their training frequency. For ordinary compounds the overlap cannot be assessed with the proxy used (AUC 0.516).
+- The test set contains frequent compounds of the training set: five of the eight analysed appear in the test set (assigned rows well above those expected if absent); four of them (`87d714366`, `8b87a7a83`, `d1b47f29d`, `d08af5d4b`) at about their training frequency, `292ab2c28` at about half of it. For ordinary compounds the overlap cannot be assessed with the proxy used (AUC 0.516).
 - A nearest-neighbour override on the frequent compounds worsens the OOF loss and was not adopted.
 
 ### Cross-validation
@@ -188,7 +172,7 @@ The gain from CatBoost is small, but it is consistent: removing it worsens the n
 
 Per-fold scores in the notebook output are the mean of the per-seed losses; they are higher than the OOF scores, which use seed-averaged predictions (bagging gain of about 0.0005 per network in run R).
 
-A full training run of R (5 folds × 2 networks × 3 seeds, plus the CatBoost CV) took about 130 minutes on a Kaggle notebook with 2× NVIDIA T4: 128 min for the main pipeline as printed by the notebook (96.6 min neural-network CV, 28.7 min CatBoost CV, 0.5 min test-set inference, the rest being blending and logging) and 131 min for the whole notebook including the final checks. Wall-clock time is noisy on the platform: the ablation configurations below, which train more jobs, finished in 106–113 minutes. The hybrid runs took less (B: 55.7 min neural-network CV, 16.7 min CatBoost CV; C: 75.2 and 16.8 min); the differences between runs are not explained here.
+A full training run of R (5 folds × 2 networks × 3 seeds, plus the CatBoost CV) took about 130 minutes on a Kaggle notebook with 2× NVIDIA T4: 128 min for the main pipeline as printed by the notebook (96.6 min neural-network CV, 28.7 min CatBoost CV, 0.5 min test-set inference, the rest being blending and logging) and 131 min for the whole notebook including the final checks. Wall-clock time is noisy on the platform: the ablation configurations below, which train more jobs, finished in 106–113 minutes. The hybrid runs took less (H1: 55.7 min neural-network CV, 16.7 min CatBoost CV; H2: 75.2 and 16.8 min); the differences between runs are not explained here.
 
 #### Run H2 (hybrid, tuning v3)
 
@@ -222,7 +206,7 @@ Other results of the diagnostics (run H0 unless stated):
 
 ### Does tuning help under the compound-aware CV?
 
-- **Run H2 against run H1. ** The blend changes by +1e-5 (0.01715 against 0.01714). Per model, the OOF changes by −9e-5 (ResNet), +8e-5 (FT-Transformer, which is the default configuration in C) and +1e-5 (CatBoost). The ResNet of H2 has a lower fold loss than that of H1 on all five folds when the three seeds are scored separately (mean difference −2.6e-4, from −1.7e-4 to −3.4e-4); after seed averaging the OOF gain shrinks to −9e-5, so most of the gain is variance that bagging already removes.
+- **Run H2 against run H1. ** The blend changes by +1e-5 (0.01715 against 0.01714). Per model, the OOF changes by −9e-5 (ResNet), +8e-5 (FT-Transformer, which is the default configuration in H2) and +1e-5 (CatBoost). The ResNet of H2 has a lower fold loss than that of H1 on all five folds when the three seeds are scored separately (mean difference −2.6e-4, from −1.7e-4 to −3.4e-4); after seed averaging the OOF gain shrinks to −9e-5, so most of the gain is variance that bagging already removes.
 - **Offline recombination** (`moa-blend-offline`, run H2 against the earlier hybrid run H0): no variant (ResNet of H2 with FT-Transformer of H0, with or without the CatBoost of H0; averages of the two runs; six models with free weights) reaches the adoption threshold (gain of at least 5e-5 and improvement on at least 4 of 5 folds). The best variant, the six-model blend, scores 0.01714 against 0.01715 for H2 (H0 alone: 0.01720).
 - The effect of tuning against the defaults, under the hybrid CV, was not measured in a controlled way.
 
@@ -244,7 +228,7 @@ Other results of the diagnostics (run H0 unless stated):
 | `9f80f3f77` | 46 | 40.3 | 64.8 | 0.26% [−0.36, 0.84] | 1.12% |
 | `d50f18348` | 35 | 31.7 | 49.4 | 0.16% [−0.45, 0.76] | 0.85% |
 
-The first five compounds are present at roughly their training frequency (together about 6.6% of the test rows against 6.8% of the training rows); the last three share their mechanism with other compounds, so the rule cannot separate them (false-positive rate 0.9–1.1%). The ninth frequent compound (19 rows) was not analysed. This is an indirect estimate and does not prove the presence or absence of a specific compound.
+The first five are present; four at about their training frequency, `292ab2c28` at about half (0.38% against 0.88%). Together they account for about 6.6% of the test rows against 6.8% of the training rows. For the last three the assigned rows are close to those expected if the compound were absent (false-positive rate 0.35–1.1%) and the 95% intervals include 0: presence cannot be established. The ninth frequent compound (19 rows) was not analysed. This is an indirect estimate and does not prove the presence or absence of a specific compound.
 
 ### Nearest-neighbour override for frequent compounds (negative result)
 
@@ -326,23 +310,35 @@ The row-wise submission (private score 0.01634) would rank approximately 1400th 
 Merlonghi-MoA-Prediction
 ├── README.md                             <- this file
 ├── software/
-│     ├── README.md                       <- setup / how-to-run instructions
-│     ├── moa-training.ipynb              <- training and cross-validation (CV_SCHEME: hybrid / grouped / row)
-│     ├── moa-training.pdf                <- landscape export of the training notebook
-│     ├── moa-inference.ipynb             <- inference and Kaggle submission
-│     ├── moa-inference.pdf               <- landscape export of the inference notebook
-│     ├── moa-tuning.ipynb                <- tuning v1 (row-wise folds, single stage)
-│     ├── moa-tuning-row.ipynb            <- tuning v2 (row-wise folds, two stages)
-│     ├── moa-tuning-hybrid.ipynb         <- tuning v3 (compound-aware folds, paired seeds)
-│     ├── moa-fold-diagnostics.ipynb      <- fold and compound diagnostics of a saved run
-│     ├── moa-blend-offline.ipynb         <- offline recombination of the OOF of two runs
-│     ├── moa-test-drug-overlap-nn.ipynb  <- indirect test-compound-overlap analysis
-│     ├── moa-knn-override-freq-drugs.ipynb <- offline test of the nearest-neighbour override
-│     ├── requirements.txt                <- python packages to install
-│     ├── requirements-frozen.txt         <- versions of the reported training run
-│     └── ablated-models/
-│           ├── moa-training-with-MoAMLP.ipynb                 <- training notebook version with ablated MLP
-│           └── moa-training-with-MoAConv1D.ipynb              <- training notebook version with ablated 1D-CNN
+│     ├── README.md                             <- setup / how-to-run instructions
+│     ├── moa-training.ipynb                    <- training and cross-validation (CV_SCHEME: hybrid / grouped / row)
+│     ├── moa-training.pdf                      <- landscape export of the training notebook
+│     ├── moa-inference.ipynb                   <- inference and Kaggle submission
+│     ├── moa-inference.pdf                     <- landscape export of the inference notebook
+│     ├── moa-tuning.ipynb                      <- tuning v1 (row-wise folds, single stage)
+│     ├── moa-tuning.pdf                        <- landscape export of tuning v1 notebook
+│     ├── moa-tuning-row.ipynb                  <- tuning v2 (row-wise folds, two stages)
+│     ├── moa-tuning-row.pdf                    <- landscape export of tuning v2 notebook
+│     ├── moa-tuning-hybrid.ipynb               <- tuning v3 (compound-aware folds, paired seeds)
+│     ├── moa-tuning-hybrid.pdf                 <- landscape export of tuning v3 notebook
+│     ├── moa-fold-diagnostics.ipynb            <- fold and compound diagnostics of a saved run
+│     ├── moa-fold-diagnostics.pdf              <- landscape export of diagnostics notebook
+│     ├── moa-blend-offline.ipynb               <- offline recombination of the OOF of two runs
+│     ├── moa-blend-offline.pdf                 <- landscape export of offline blend notebook
+│     ├── moa-test-drug-overlap-nn.ipynb        <- indirect test-compound-overlap analysis
+│     ├── moa-test-drug-overlap-nn.pdf          <- landscape export of test-compound-overlap analysis notebook
+│     ├── moa-knn-override-freq-drugs.ipynb     <- offline test of the nearest-neighbour override
+│     ├── moa-knn-override-freq-drugs.pdf       <- landscape export of offline test of the knn override notebook
+│     ├── requirements.txt                      <- python packages to install
+│     ├── requirements-frozen.txt               <- versions of the reported training run
+│     ├── ablated-models/
+│     │      ├── moa-training-with-MoAMLP.ipynb             <- training notebook version with ablated MLP
+│     │      └── moa-training-with-MoAConv1D.ipynb          <- training notebook version with ablated 1D-CNN
+│     └── hyperparameters/
+│            ├── best_hyperparameters_hybrid.json           <- JSON file for hyperparameters tuned in v3                             
+│            ├── best_hyperparameters_row.json              <- JSON file for hyperparameters tuned in v2
+│            ├── default_hyperparameters.json               <- JSON file for default hyperparameters
+│            └── README.md                                  
 └── doc/
       ├── moa-presentation.pdf
       └── moa-presentation.tex            <- latex beamer

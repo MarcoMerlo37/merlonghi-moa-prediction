@@ -1,0 +1,25 @@
+{
+    "ResNet": {
+        "lr": 0.0026669003721056773,
+        "dropout": 0.5828160165372797,
+        "weight_decay": 0.0002661901888489054,
+        "hidden_dim": 768,
+        "batch_size": 512
+    },
+    "FTTransformer": {
+        "lr": 0.001,
+        "dropout": 0.2,
+        "weight_decay": 1e-05,
+        "d_token": 64,
+        "n_blocks": 2,
+        "attention_heads": 4,
+        "batch_size": 64
+    },
+    "CatBoost": {
+        "depth": 4,
+        "l2_leaf_reg": 55.99002805118824,
+        "learning_rate": 0.10338380617159558,
+        "subsample": 0.8285511060504747,
+        "iterations": 250
+    }
+}

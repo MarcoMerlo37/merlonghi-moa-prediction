@@ -1,0 +1,24 @@
+{
+    "ResNet": {
+        "lr": 1e-3, 
+        "dropout": 0.2, 
+        "weight_decay": 1e-5, 
+        "hidden_dim": 512,
+        "batch_size": 256
+    },
+    "FTTransformer": {
+        "lr": 1e-3, 
+        "dropout": 0.2, 
+        "weight_decay": 1e-5, 
+        "d_token": 64,
+        "n_blocks": 2, 
+        "attention_heads": 4, 
+        "batch_size": 64
+    },
+    "CatBoost": {
+        "depth": 5, 
+        "l2_leaf_reg": 3.0, 
+        "learning_rate": 0.08,
+        "iterations": 250
+    }
+}

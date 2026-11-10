@@ -215,18 +215,7 @@ The artifacts used for the reported submissions (runs R and C) are private to th
 
 On the public test set, the `submission.csv` of the inference notebook was compared with the one produced by the training notebook: for run R the maximum absolute difference is 1.1e-16. This confirms that the artifacts, the feature order and the blend weights are loaded correctly.
 
-The same check should be repeated for every new set of artifacts, before submitting: save the `submission.csv` of the training run as a small Dataset (a file with a unique name, for example `submission_training_C.csv`, and no `metadata.json`), attach it to the inference notebook and add a last cell:
-
-```python
-# Step 9.6 - compare with the submission of the training run
-ref_dir = find_input_directory("submission_training_C.csv")
-ref = pd.read_csv(f"{ref_dir}/submission_training_C.csv")
-assert list(ref.columns) == list(submission.columns), "different columns"
-assert (ref["sig_id"].values == submission["sig_id"].values).all(), "different row order"
-diff = np.abs(ref[target_cols].values - submission[target_cols].values)
-print(f"max abs diff {diff.max():.2e} | mean {diff.mean():.2e}")
-assert diff.max() < 1e-6, "inference and training differ: do not submit"
-```
+The same check should be repeated for every new set of artifacts, before submitting: save the `submission.csv` of the training run as a small Dataset (a file with a unique name, for example `submission_training_H2.csv`, and no `metadata.json`), attach it to the inference notebook and run the last cell (Step 9.6), which is optional.
 
 A maximum difference of the order of 1e-16 is expected; differences up to 1e-9–1e-6 can come from different library versions; larger ones point to an inconsistency (for example artifacts of another run, wrong blend weights, or a `_build_model` that ignores `model_hyperparameters`).
 
@@ -249,18 +238,10 @@ The private score is 11.8% above the rescaled CV estimate for run R and 5.3% for
 
 ---
 
+
 ## 9. Ablated models (`ablated-models/`)
 
-[`ablated-models/`](ablated-models/) contains the two extra networks tried in the ablation of the main [`README.md`](../README.md): `MoAMLP.py` (name `"mlp"`, three hidden layers 1024-1024-512) and `MoAConv1D.py` (name `"cnn1d"`, a dense expansion into a 256×16 pseudo-sequence followed by two 1D convolutions). They are not used by any delivered notebook, and they are not stand-alone scripts: they only define the `nn.Module`.
-
-To reproduce the ablation, copy the class into the training notebook (Step 4) and register it:
-
-```python
-MODEL_CLASSES["mlp"] = MoAMLP          # Step 9.1; MODEL_NAMES is built from this dict
-```
-
-Any model other than `ft_transformer` receives the PCA features (`_job_arrays`, Step 9.3) and the default batch size (`BATCH_SIZE`, 256). The raw-feature variant of the 1D-CNN requires changing the `key` choice in `_job_arrays`. The inference notebook ignores these models: the final blend has three components. The ablation was run on the row-wise protocol with default hyperparameters and an earlier revision of the code, so its absolute values differ from the final run in the last digit. Registering an extra model also requires an entry for it in `MODEL_KWARGS` and `TRAIN_KWARGS` (Step 1.5), which the current notebook defines only for `resnet` and `ft_transformer`.
-
+`ablated-models/` contains two complete copies of the training notebook, taken at the revision used for the ablation of the main README (row-wise protocol, default hyperparameters, no `train_drug.csv`), with one extra network each: `moa-training-with-MoAMLP.ipynb` (`"mlp"`, three hidden layers 1024-1024-512) and `moa-training-with-MoAConv1D.ipynb` (`"cnn1d"`, dense expansion into a 256×16 pseudo-sequence followed by two 1D convolutions). They are self-contained: run them as they are on Kaggle (section 5, steps 1–3 and 6–8; no hyperparameter file or drug file is needed). They are not used by the delivered training or inference notebooks.
 ---
 
 ## 10. Tuning notebooks
@@ -298,9 +279,9 @@ Descriptive diagnostics of a compound-aware run, without GPU and without retrain
 
 ### 11.2 `moa-blend-offline.ipynb`
 
-Compares the nested blend of the OOF predictions of two runs with the same rows and folds: all of the first, all of the second (baseline), ResNet of one run with FT-Transformer and CatBoost of the other, the average of the two runs per model type, and a six-model blend with free weights. A variant is marked as adoptable only if it improves the baseline by at least `MIN_GAIN` (5e-5) and in at least `MIN_FOLDS_IMPROVED` (4) of the 5 folds, by paired per-fold differences.
+Compares the nested blend of the OOF predictions of two runs with the same rows and folds: all of the first, all of the second (baseline), ResNet of one run with FT-Transformer and CatBoost of the other, the average of the two runs per model type, and a six-model blend with free weights. A variant is marked as adoptable only if it improves the baseline by at least `MIN_GAIN` (5e-5) and in at least `MIN_FOLDS_BETTER` (4) of the 5 folds, by paired per-fold differences.
 
-- **Inputs:** `ROW` (the comparison run) and `HYBRID` (the main run, used as baseline) — two folders with the OOF files above. The notebook asserts that the labels and the fold assignments are identical and stops otherwise. In the reported analysis `ROW` was the earlier hybrid run H0 and `HYBRID` run H2.
+- **Inputs:** `H0` (the comparison run) and `H2` (the main run, used as baseline) — two folders with the OOF files above. The notebook asserts that the labels and the fold assignments are identical and stops otherwise. In the reported analysis `H0` was the earlier hybrid run H0 and `H2` run H2.
 - **Check:** the baseline must reproduce the nested score printed by the training notebook (0.01715 for run H2); a different value means that the rows are misaligned or that the wrong folder was attached.
 - **Output:** a table and the mean blend weights per variant. No variant was adoptable in the reported analysis (best gain 1e-5).
 
