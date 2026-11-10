@@ -10,7 +10,7 @@ This project addresses the Kaggle **Mechanisms of Action (MoA) Prediction** chal
 - Data: <https://www.kaggle.com/competitions/lish-moa/data>
 
 
-The solution is delivered as a **training** notebook, which cross-validates the models and saves them, and an **inference** notebook, which loads the saved models and produces the Kaggle submission (see [`software/`](merlonghi-moa-prediction/software/)). Around them sit three **tuning** notebooks, a **fold and compound diagnostics** notebook and three **offline analysis** notebooks, which document how the cross-validation protocol and the hyperparameters were investigated (see [Notebooks](#notebooks)). Two models were submitted to the Kaggle test set as late submissions: the first was trained with row-wise cross-validation and default hyperparameters (run R), the second with the compound-aware hybrid cross-validation and tuned hyperparameters (run H2) (see [Results](#results)).
+The solution is delivered as a **training** notebook, which cross-validates the models and saves them, and an **inference** notebook, which loads the saved models and produces the Kaggle submission (see [`software/`](/software/)). Around them sit three **tuning** notebooks, a **fold and compound diagnostics** notebook and three **offline analysis** notebooks, which document how the cross-validation protocol and the hyperparameters were investigated (see [Notebooks](#notebooks)). Two models were submitted to the Kaggle test set as late submissions: the first was trained with row-wise cross-validation and default hyperparameters (run R), the second with the compound-aware hybrid cross-validation and tuned hyperparameters (run H2) (see [Results](#results)).
 
 ### Data in brief
 
@@ -29,23 +29,23 @@ Figures from the exploratory analysis in the training notebook (Step 2.3 and `de
 - Make the cross-validation compound-aware: use `train_drug.csv` to build folds that keep a compound in a single fold (three protocols: `row`, `grouped`, `hybrid`), and quantify how optimistic the row-wise estimate was.
 - Tune the hyperparameters of the three models with Optuna [12, 13] under a protocol that never uses the outer validation fold for model selection, and test whether tuning matters under the compound-aware cross-validation.
 - Check the cross-validated estimate against an independent measure: the Kaggle test set (two late submissions; see [Results](#independent-check-on-the-kaggle-test-set) for how it was and was not used).
-- Produce a clean, reproducible, well-documented deliverable (see [`software/`](merlonghi-moa-prediction/software/)).
+- Produce a clean, reproducible, well-documented deliverable (see [`software/`](/software/)).
 
 ## Notebooks
 
-All notebooks are in [`software/`](merlonghi-moa-prediction/software/); setup and run instructions are in [`software/README.md`](merlonghi-moa-prediction/software/README.md).
+All notebooks are in [`software/`](/software/); setup and run instructions are in [`software/README.md`](/software/README.md).
 
 | Notebook | Role | Main outputs |
 |---|---|---|
-| [`moa-training.ipynb`](merlonghi-moa-prediction/software/moa-training.ipynb) | Training and cross-validation of ResNet, FT-Transformer and CatBoost under `CV_SCHEME` = `hybrid` (default), `grouped` or `row`; hyperparameters read from a JSON file (Step 1.5); nested-CV blend; per-target error analysis (Step 15.4) and CV-protocol diagnostics (Step 15.5) | 51 artifacts for inference, `submission.csv`, OOF predictions (`oof_*.npy`), fold and compound bookkeeping, per-target reports |
-| [`moa-inference.ipynb`](merlonghi-moa-prediction/software/moa-inference.ipynb) | Loads the saved artifacts and writes the Kaggle submission, no training; rebuilds the networks from `model_hyperparameters` in `metadata.json` | `submission.csv` |
-| [`moa-tuning.ipynb`](merlonghi-moa-prediction/software/moa-tuning.ipynb) | Tuning v1: superseded version. It uses 80 PCA components for g- and 300 CatBoost iterations, unlike the final pipeline (50 and 250); its output was not used by any reported run. | `best_hyperparameters.json` |
-| [`moa-tuning-row.ipynb`](merlonghi-moa-prediction/software/moa-tuning-row.ipynb) | Tuning v2: two stages on row-wise folds. Search on fold 0 (25/15/15 trials, 10% inner split for early stopping, default configuration enqueued as trial 0), confirmation of the top 3 candidates and of the default on fold 1; a tuned model is adopted only if it beats the default on both folds by at least 5e-5 | `best_hyperparameters.json`, `tuning_report.json`, `trials_*.csv` |
-| [`moa-tuning-hybrid.ipynb`](merlonghi-moa-prediction/software/moa-tuning-hybrid.ipynb) | Tuning v3: v2 with compound-aware folds (outer folds and inner split built like the training notebook's hybrid protocol, own split seed), wider search spaces, a longer pruner warm-up, and a confirmation on fold 1 with three paired seeds. A candidate is adopted only if the mean gain on the confirmation fold is at least 1e-4 **and** it wins on more than half of the seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_*.csv` |
-| [`moa-fold-diagnostics.ipynb`](merlonghi-moa-prediction/software/moa-fold-diagnostics.ipynb) | CPU-only diagnostics of a compound-aware run from its saved OOF files: fold sizes and losses, the largest compounds, targets dominated by a single compound, simulation of the `HYBRID_MIN_ROWS` threshold, and decomposition of the gap between protocols by compound frequency (with a bootstrap over compounds) | printed tables |
-| [`moa-blend-offline.ipynb`](merlonghi-moa-prediction/software/moa-blend-offline.ipynb) | Offline recombination of the OOF predictions of two runs with identical rows and folds (mixing models, averaging, six-model blend), scored with nested blending and paired per-fold differences | printed table |
-| [`moa-test-drug-overlap-nn.ipynb`](merlonghi-moa-prediction/software/moa-test-drug-overlap-nn.ipynb) | Indirect check of whether the test set shares compounds with the training set, from nearest-neighbour distances in feature space, with a power check (AUC and recovery of a known mixture) and a per-compound analysis of the frequent compounds | `nn_distance_ecdf.png`, `frequent_drugs_in_test.csv` |
-| [`moa-knn-override-freq-drugs.ipynb`](merlonghi-moa-prediction/software/moa-knn-override-freq-drugs.ipynb) | Offline test, on the hybrid OOF, of a nearest-neighbour override of the predictions for the rows of frequent compounds | printed tables |
+| [`moa-training.ipynb`](/software/moa-training.ipynb) | Training and cross-validation of ResNet, FT-Transformer and CatBoost under `CV_SCHEME` = `hybrid` (default), `grouped` or `row`; hyperparameters read from a JSON file (Step 1.5); nested-CV blend; per-target error analysis (Step 15.4) and CV-protocol diagnostics (Step 15.5) | 51 artifacts for inference, `submission.csv`, OOF predictions (`oof_*.npy`), fold and compound bookkeeping, per-target reports |
+| [`moa-inference.ipynb`](/software/moa-inference.ipynb) | Loads the saved artifacts and writes the Kaggle submission, no training; rebuilds the networks from `model_hyperparameters` in `metadata.json` | `submission.csv` |
+| [`moa-tuning.ipynb`](/software/moa-tuning.ipynb) | Tuning v1: superseded version. It uses 80 PCA components for g- and 300 CatBoost iterations, unlike the final pipeline (50 and 250); its output was not used by any reported run. | `best_hyperparameters.json` |
+| [`moa-tuning-row.ipynb`](/software/moa-tuning-row.ipynb) | Tuning v2: two stages on row-wise folds. Search on fold 0 (25/15/15 trials, 10% inner split for early stopping, default configuration enqueued as trial 0), confirmation of the top 3 candidates and of the default on fold 1; a tuned model is adopted only if it beats the default on both folds by at least 5e-5 | `best_hyperparameters.json`, `tuning_report.json`, `trials_*.csv` |
+| [`moa-tuning-hybrid.ipynb`](/software/moa-tuning-hybrid.ipynb) | Tuning v3: v2 with compound-aware folds (outer folds and inner split built like the training notebook's hybrid protocol, own split seed), wider search spaces, a longer pruner warm-up, and a confirmation on fold 1 with three paired seeds. A candidate is adopted only if the mean gain on the confirmation fold is at least 1e-4 **and** it wins on more than half of the seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_*.csv` |
+| [`moa-fold-diagnostics.ipynb`](/software/moa-fold-diagnostics.ipynb) | CPU-only diagnostics of a compound-aware run from its saved OOF files: fold sizes and losses, the largest compounds, targets dominated by a single compound, simulation of the `HYBRID_MIN_ROWS` threshold, and decomposition of the gap between protocols by compound frequency (with a bootstrap over compounds) | printed tables |
+| [`moa-blend-offline.ipynb`](/software/moa-blend-offline.ipynb) | Offline recombination of the OOF predictions of two runs with identical rows and folds (mixing models, averaging, six-model blend), scored with nested blending and paired per-fold differences | printed table |
+| [`moa-test-drug-overlap-nn.ipynb`](/software/moa-test-drug-overlap-nn.ipynb) | Indirect check of whether the test set shares compounds with the training set, from nearest-neighbour distances in feature space, with a power check (AUC and recovery of a known mixture) and a per-compound analysis of the frequent compounds | `nn_distance_ecdf.png`, `frequent_drugs_in_test.csv` |
+| [`moa-knn-override-freq-drugs.ipynb`](/software/moa-knn-override-freq-drugs.ipynb) | Offline test, on the hybrid OOF, of a nearest-neighbour override of the predictions for the rows of frequent compounds | printed tables |
 
 ### Runs referred to in the results
 
@@ -77,7 +77,7 @@ The diagnostics notebook was applied to a further, earlier `hybrid` run: called 
 | Diagnostics | Per-target error analysis (skill against the per-target prior, calibration, loss share) with bootstrap over compounds; CV-protocol diagnostics; fold and compound diagnostics; indirect test-compound-overlap analysis |
 | Inference | Separate notebook: loads the 30 network checkpoints, 5 CatBoost models, 10 fold pipelines and the blend weights; no training |
 
-Architectural and implementation details are documented inline in the notebooks — see [`software/moa-training.ipynb`](merlonghi-moa-prediction/software/moa-training.ipynb) (training) and [`software/moa-inference.ipynb`](merlonghi-moa-prediction/software/moa-inference.ipynb) (inference). The FT-Transformer is a simplified variant of the one in [2] (post-LayerNorm encoder, GELU feed-forward, no ReGLU). The slides are in [`doc/`](merlonghi-moa-prediction/doc/).
+Architectural and implementation details are documented inline in the notebooks — see [`software/moa-training.ipynb`](/software/moa-training.ipynb) (training) and [`software/moa-inference.ipynb`](/software/moa-inference.ipynb) (inference). The FT-Transformer is a simplified variant of the one in [2] (post-LayerNorm encoder, GELU feed-forward, no ReGLU). The slides are in [`doc/`](/doc/).
 
 ### Cross-validation protocols
 
@@ -277,7 +277,7 @@ Run on the row-wise protocol with default hyperparameters (run R). Three configu
 
 The MLP was redundant with the ResNet (same features, same model family) and was replaced by a 1D-CNN with a different inductive bias. The CNN earns 7–8% of the weight, but no configuration improves the ensemble: all scores lie within 0.00002, below the fold standard deviation (0.00017) and the run-to-run GPU noise (about 1e-5). Giving the CNN raw instead of PCA features did not change its own OOF score (0.01661). The simpler 3-model blend was therefore kept as the final solution: fewer components to train, explain and maintain, for the same score.
 
-The training notebooks containing the MLP and 1D-CNN are in [`software/ablated-models/`](merlonghi-moa-prediction/software/ablated-models/). The figures above are reported from those runs and can be reproduced from the repository alone.
+The training notebooks containing the MLP and 1D-CNN are in [`software/ablated-models/`](/software/ablated-models/). The figures above are reported from those runs and can be reproduced from the repository alone.
 
 The "differences below the fold standard deviation" argument is unpaired. The per-fold scores of the ablation runs were not kept, so a paired comparison (as done above for CatBoost) was not possible; the conclusion therefore rests on the differences being of the same order as the run-to-run noise.
 
@@ -302,12 +302,12 @@ The row-wise submission (private score 0.01634) would rank approximately 1400th 
 - **Non-determinism.** Repeated GPU runs of the row-wise code differed by about 1e-5 in OOF log loss; the run-to-run noise of the hybrid runs was not measured.
 - **No ablation** of individual design choices (PCA vs. raw features for the ResNet, label smoothing) was run. The only raw-vs-PCA comparison concerns the 1D-CNN of the extra-network ablation.
 - **Mixed precision in validation, full precision at test time.** Out-of-fold predictions, and therefore the blend weights, are computed with fp16 autocast on GPU, while the inference notebook runs in fp32. On fold 0 (first seed) of run H2 the two modes differ by at most 5.72e-4 (ResNet) and 4.30e-3 (FT-Transformer) in predicted probability, but the log loss differs by at most 1e-6 (0.017124 vs. 0.017124 and 0.017690 vs. 0.017689, Step 15.1). The effect on the blend weights was not measured separately.
-- **Inference depends on saved artifacts.** The inference notebook needs the Kaggle Dataset of trained models, which is not stored in this repository; it is produced by the training notebook (see [`software/README.md`](merlonghi-moa-prediction/software/README.md)). Exactly one attached input may contain `metadata.json`, so analysis Datasets with a copy of it must not be attached to the inference notebook.
+- **Inference depends on saved artifacts.** The inference notebook needs the Kaggle Dataset of trained models, which is not stored in this repository; it is produced by the training notebook (see [`software/README.md`](/software/README.md)). Exactly one attached input may contain `metadata.json`, so analysis Datasets with a copy of it must not be attached to the inference notebook.
 
 ## Repository structure
 
 ```
-Merlonghi-MoA-Prediction
+merlonghi-moa-prediction
 ├── README.md                             <- this file
 ├── software/
 │     ├── README.md                             <- setup / how-to-run instructions
