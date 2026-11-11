@@ -11,10 +11,10 @@ This folder contains the full, runnable solution for the Kaggle **Mechanisms of 
 | [`moa-training-grouped.ipynb`](cv-scheme-runs/moa-training-grouped.ipynb) | **Run G3:** the training notebook with `CV_SCHEME = "grouped"` and the tuned hyperparameters; outputs saved | [`moa-training-grouped.pdf`](cv-scheme-runs/moa-training-grouped.pdf) | 5.1 |
 | [`moa-training-row.ipynb`](cv-scheme-runs/moa-training-row.ipynb) | **Run R3:** the training notebook with `CV_SCHEME = "row"` and the tuned hyperparameters; outputs saved | [`moa-training-row.pdf`](cv-scheme-runs/moa-training-row.pdf) | 5.1 |
 | [`moa-tuning-hybrid.ipynb`](moa-tuning-hybrid.ipynb) | **Tuning:** two-stage Optuna search and paired-seed confirmation on compound-aware folds | [`moa-tuning-hybrid.pdf`](moa-tuning-hybrid.pdf) | 10 |
-| [`moa-fold-diagnostics.ipynb`](moa-fold-diagnostics.ipynb) | Fold, compound and protocol diagnostics of a saved run | – | 11 |
-| [`moa-blend-offline.ipynb`](moa-blend-offline.ipynb) | Offline recombination of the OOF predictions of two runs | – | 11 |
-| [`moa-test-drug-overlap-nn.ipynb`](moa-test-drug-overlap-nn.ipynb) | Indirect analysis of the compound overlap between train and test | – | 11 |
-| [`moa-knn-override-freq-drugs.ipynb`](moa-knn-override-freq-drugs.ipynb) | Offline test of a nearest-neighbour override for frequent compounds | – | 11 |
+| [`moa-fold-diagnostics.ipynb`](moa-fold-diagnostics.ipynb) | Fold, compound and protocol diagnostics of a saved run | [`moa-fold-diagnostics.pdf`](moa-fold-diagnostics.pdf) | 11 |
+| [`moa-blend-offline.ipynb`](moa-blend-offline.ipynb) | Offline recombination of the OOF predictions of two runs | [`moa-blend-offline.pdf`](moa-blend-offline.pdf) | 11 |
+| [`moa-test-drug-overlap-nn.ipynb`](moa-test-drug-overlap-nn.ipynb) | Indirect analysis of the compound overlap between train and test | [`moa-test-drug-overlap-nn.pdf`](moa-test-drug-overlap-nn.pdf) | 11 |
+| [`moa-knn-override-freq-drugs.ipynb`](moa-knn-override-freq-drugs.ipynb) | Offline test of a nearest-neighbour override for frequent compounds | [`moa-knn-override-freq-drugs.pdf`](moa-knn-override-freq-drugs.pdf) | 11 |
 
 The training notebook builds and cross-validates three base models (TabularResNet, FT-Transformer, CatBoost) on gene-expression / cell-viability profiles and blends them with a nested-CV-validated weighted ensemble. The inference notebook applies the trained models to the test set. The two are separate because the challenge is a **code competition**: a notebook is submitted and re-run by Kaggle on the hidden test set, without internet access. Retraining (75–95 minutes on 2 GPUs for the compound-aware runs) is not needed for that. See the top-level [`README.md`](../README.md) for objectives, methodology and results; the slides are in [`../doc/`](../doc/).
 
