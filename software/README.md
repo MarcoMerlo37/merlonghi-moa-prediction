@@ -2,15 +2,15 @@
 
 ## 1. Project description
 
-This folder contains the full, runnable solution for the Kaggle **Mechanisms of Action (MoA) Prediction** challenge. The core is two Jupyter notebooks, training and inference; seven further notebooks document how the hyperparameters and the cross-validation protocol were investigated.
+This folder contains the full, runnable solution for the Kaggle **Mechanisms of Action (MoA) Prediction** challenge. The core is two Jupyter notebooks, training and inference; seven further notebooks document how the hyperparameters and the cross-validation protocol were investigated (one tuning notebook, two copies of the training notebook for the other protocols, four analysis notebooks).
 
 | Notebook | Purpose | PDF export | Section |
 |---|---|---|---|
 | [`moa-training.ipynb`](moa-training.ipynb) | **Training**: exploratory analysis, compound-aware cross-validation of three base models (`CV_SCHEME` = `hybrid`, `grouped` or `row`), nested-CV blending, saving of all trained artifacts and of the OOF predictions, per-target and CV-protocol diagnostics | [`moa-training.pdf`](moa-training.pdf) | 5–7 |
 | [`moa-inference.ipynb`](moa-inference.ipynb) | **Inference**: loads the saved artifacts and writes the Kaggle `submission.csv`, with no training | [`moa-inference.pdf`](moa-inference.pdf) | 8 |
-| [`moa-tuning.ipynb`](moa-tuning.ipynb) | **Tuning v1**: single-stage Optuna search on 5 row-wise folds | – | 10 |
-| [`moa-tuning-row.ipynb`](moa-tuning-row.ipynb) | **Tuning v2**: two-stage search and confirmation on row-wise folds | – | 10 |
-| [`moa-tuning-hybrid.ipynb`](moa-tuning-hybrid.ipynb) | **Tuning v3**: v2 with compound-aware folds and paired-seed confirmation | – | 10 |
+| [`moa-training-grouped.ipynb`](cv-scheme-runs/moa-training-grouped.ipynb) | **Run G3:** the training notebook with `CV_SCHEME = "grouped"` and the tuned hyperparameters; outputs saved | [`moa-training-grouped.pdf`](cv-scheme-runs/moa-training-grouped.pdf) | 5.1 |
+| [`moa-training-row.ipynb`](cv-scheme-runs/moa-training-row.ipynb) | **Run R3:** the training notebook with `CV_SCHEME = "row"` and the tuned hyperparameters; outputs saved | [`moa-training-row.pdf`](cv-scheme-runs/moa-training-row.pdf) | 5.1 |
+| [`moa-tuning-hybrid.ipynb`](moa-tuning-hybrid.ipynb) | **Tuning:** two-stage Optuna search and paired-seed confirmation on compound-aware folds | [`moa-tuning-hybrid.pdf`](moa-tuning-hybrid.pdf) | 10 |
 | [`moa-fold-diagnostics.ipynb`](moa-fold-diagnostics.ipynb) | Fold, compound and protocol diagnostics of a saved run | – | 11 |
 | [`moa-blend-offline.ipynb`](moa-blend-offline.ipynb) | Offline recombination of the OOF predictions of two runs | – | 11 |
 | [`moa-test-drug-overlap-nn.ipynb`](moa-test-drug-overlap-nn.ipynb) | Indirect analysis of the compound overlap between train and test | – | 11 |
@@ -21,7 +21,7 @@ The training notebook builds and cross-validates three base models (TabularResNe
 **Order of use.** The notebooks do not have to be run in this order, but the dependencies are:
 
 ```
-tuning (v2 or v3)  ──►  best_hyperparameters*.json  ──►  moa-training  ──►  artifacts + OOF files
+moa-tuning-hybrid  ──►  best_hyperparameters_hybrid.json  ──►  moa-training (and its copies in cv-scheme-runs/)  ──►  artifacts + OOF files
                                                                               │
                                    ┌──────────────────────────────────────────┤
                                    ▼                                          ▼
@@ -38,12 +38,12 @@ The first cell of each notebook contains a workflow overview, and every major co
 
 All notebooks were authored and executed **on Kaggle**, inside Kaggle Notebooks (kernels), not on a local machine. A few things in the code and in the results are tied to that platform:
 
-- **Accelerator:** GPU T4 x2 (two NVIDIA Tesla T4 GPUs) for the training notebook. This is why the code contains GPU-count-aware logic (`N_GPUS`, round-robin device assignment across workers) and comments about the GPUs' VRAM limits. Tuning v1 runs two Optuna jobs in parallel when two GPUs are visible; tuning v2 and v3 run sequentially on the first GPU (`cuda:0`). The diagnostics and analysis notebooks (section 11) need no GPU.
+- **Accelerator:** GPU T4 x2 (two NVIDIA Tesla T4 GPUs) for the training notebook. This is why the code contains GPU-count-aware logic (`N_GPUS`, round-robin device assignment across workers) and comments about the GPUs' VRAM limits. The tuning notebook runs its trials sequentially on the first GPU (`cuda:0`). The diagnostics and analysis notebooks (section 11) need no GPU.
 - **Python / image:** Kaggle's standard `python` Docker image (with `numpy`, `pandas`, `torch`, `scikit-learn`, etc. pre-installed). The training runs used Python 3.12; the inference and diagnostics runs, Python 3.13.
-- **Data mount:** the competition data is attached as a Kaggle competition source and appears already extracted under `/kaggle/input/competitions/lish-moa`. This path depends on the platform version: if it differs, check `/kaggle/input` in a cell and edit `DATA_DIR` in the training notebook. The inference, tuning-v3 and analysis notebooks find their input folders by file name (or accept an explicit path) and need no edit unless they report an ambiguity.
+- **Data mount:** the competition data is attached as a Kaggle competition source and appears already extracted under `/kaggle/input/competitions/lish-moa`. This path depends on the platform version: if it differs, check `/kaggle/input` in a cell and edit `DATA_DIR` in the training notebook. The inference, tuning and analysis notebooks find their input folders by file name (or accept an explicit path) and need no edit unless they report an ambiguity.
 - **Working directory:** intermediate artefacts (model checkpoints, fold preprocessing pipelines, experiment logs, OOF predictions, the final `submission.csv`) are written to `/kaggle/working`, which Kaggle persists as the notebook's output.
-- **Runtime (training):** the compound-aware runs took **75.1 minutes** (run H1: 55.7 min neural-network CV, 16.7 min CatBoost CV, 0.5 min test-set inference) and **95.0 minutes** (run H2: 75.2 and 16.8 min) wall-clock on the two T4s; the earlier row-wise run with default hyperparameters took about **130 minutes** (≈97 min neural-network CV, ≈29 min CatBoost CV, <1 min test-set inference). Timing varies with the platform machine: expect roughly ±20%. The differences between the runs are not explained here. The runtime of the tuning notebooks was not recorded in this repository; tuning v2 and v3 write `elapsed_minutes` to `tuning_report.json`.
-- **Internet access:** the training notebook has one network call, `!pip install -q iterative-stratification`, in its first code cell, so the "Internet" toggle must be **on** for that session. The same holds for tuning v1 (`iterative-stratification`), tuning v2 and v3 (`iterative-stratification`, `optuna`, `catboost`) and the diagnostics notebook (`iterative-stratification`). `moa-blend-offline`, `moa-test-drug-overlap-nn`, `moa-knn-override-freq-drugs` and the inference notebook make no network call and run with internet **off**.
+- **Runtime (training):** the compound-aware runs took **95.0 minutes** (run H2: 75.2 min neural-network CV, 16.8 min CatBoost CV, 0.5 min test-set inference) and **89.9 minutes** (run G3: 70.2 and 16.8 min) wall-clock on the two T4s; run R3 (`row`) took **116.5 minutes** (96.0 min neural-network CV, 17.7 min CatBoost CV, 0.5 min test-set inference); the earlier row-wise run R with default hyperparameters took about **130 minutes** (≈97 min neural-network CV, ≈29 min CatBoost CV, <1 min test-set inference). Timing varies with the platform machine: expect roughly ±20%. The differences between the runs are not explained here. The runtime of the tuning notebook was not recorded in this repository; it writes `elapsed_minutes` to `tuning_report.json`.
+- **Internet access:** the training notebook has one network call, `!pip install -q iterative-stratification`, in its first code cell, so the "Internet" toggle must be **on** for that session. The same holds for the tuning notebook and the diagnostics notebook (`iterative-stratification`; the tuning notebook also imports `optuna` and `catboost`, which were available in the Kaggle image of the reported run and are listed in `requirements.txt` for other environments). `moa-blend-offline`, `moa-test-drug-overlap-nn`, `moa-knn-override-freq-drugs` and the inference notebook make no network call and run with internet **off**.
 
 Running **on Kaggle** (Option A below) is the path closest to how the notebooks were built and validated. The training notebook can also be run **locally** (Option B): only `DATA_DIR`, `WORK_DIR` and the hyperparameters file need to point elsewhere, and a GPU must be provided by the local machine.
 
@@ -52,7 +52,7 @@ Running **on Kaggle** (Option A below) is the path closest to how the notebooks 
 The raw competition data is **not included in this repository** (over 100 MB, and redistribution outside Kaggle's platform is against the competition rules).
 
 - Data page (permanent link): <https://www.kaggle.com/competitions/lish-moa/data>
-- Expected files: `train_features.csv`, `train_targets_scored.csv`, `test_features.csv`, `sample_submission.csv`, and `train_drug.csv` (the mapping from every training signature to its compound, `drug_id`, published by the competition hosts; it is needed by every protocol except `row`, by tuning v3 and by the analysis notebooks, and it has no counterpart for the test set).
+- Expected files: `train_features.csv`, `train_targets_scored.csv`, `test_features.csv`, `sample_submission.csv`, and `train_drug.csv` (the mapping from every training signature to its compound, `drug_id`, published by the competition hosts; it is needed by every protocol except `row`, by the tuning notebook and by the analysis notebooks, and it has no counterpart for the test set).
 
 The trained artifacts used by the inference notebook are not included either; they are produced by the training notebook (see section 8.2). The same holds for the hyperparameter files (section 10) and the OOF files (section 11).
 
@@ -60,7 +60,7 @@ The trained artifacts used by the inference notebook are not included either; th
 
 - Python 3.12 (training) and 3.13 (inference).
 - A CUDA-capable GPU is strongly recommended for training and tuning. Without one, training time for the full multi-seed, multi-model cross-validation would be prohibitively long.
-- Packages (see [`requirements.txt`](requirements.txt)): `numpy`, `pandas`, `scipy`, `joblib`, `scikit-learn`, `torch`, `iterative-stratification`, `catboost`, `matplotlib` (exploratory plots), and `optuna` (tuning notebooks only). `requirements.txt` lists the packages without versions; [`requirements-frozen.txt`](requirements-frozen.txt) pins the versions of the Kaggle environment of the reported run (written by Step 14.9 of the training notebook; Python itself is not included: 3.12 for training). For a faithful rerun, install from the frozen file. `scikit-learn` and `catboost` matter most: the fold pipelines are `scikit-learn` pickles and the CatBoost models are saved in its own format (reported run: `scikit-learn==1.6.1`, `catboost==1.2.10`). `optuna` is not part of the training environment and is not pinned by the frozen file.
+- Packages (see [`requirements.txt`](requirements.txt)): `numpy`, `pandas`, `scipy`, `joblib`, `scikit-learn`, `torch`, `iterative-stratification`, `catboost`, `matplotlib` (exploratory plots), and `optuna` (tuning notebook only). `requirements.txt` lists the packages without versions; [`requirements-frozen.txt`](requirements-frozen.txt) pins the versions of the Kaggle environment of the reported run (written by Step 14.9 of the training notebook; Python itself is not included: 3.12 for training). For a faithful rerun, install from the frozen file. `scikit-learn` and `catboost` matter most: the fold pipelines are `scikit-learn` pickles and the CatBoost models are saved in its own format (reported run: `scikit-learn==1.6.1`, `catboost==1.2.10`). `optuna` is not part of the training environment and is not pinned by the frozen file.
 - The inference notebook needs the same libraries, minus `iterative-stratification`. The fold preprocessing pipelines are `scikit-learn` pickles, so the installed `scikit-learn` version should match the one used for training. Step 9.1 of the inference notebook prints the installed versions.
 
 ---
@@ -70,14 +70,14 @@ The trained artifacts used by the inference notebook are not included either; th
 1. Go to the competition page, <https://www.kaggle.com/competitions/lish-moa>, and join the competition if required (accepting its rules is needed to access the data).
 2. On Kaggle, click **Create → New Notebook**, then **File → Import Notebook** and upload [`moa-training.ipynb`](moa-training.ipynb).
 3. Attach the competition data: in the right-hand panel, **Add Input** → search `lish-moa` → **Mechanisms of Action (MoA) Prediction** → **Add**. This mounts the CSV files, including `train_drug.csv`, under `/kaggle/input/competitions/lish-moa`, matching the default `DATA_DIR`. If `train_drug.csv` is not in that folder, the notebook looks for it by name under `/kaggle/input` and stops if it finds none or several.
-4. Attach the hyperparameters, or train with the defaults. Upload the JSON file of the tuning notebooks (section 10) as a Dataset, add it as an input, and set `HYPERPARAMETERS_FILE` in Step 1.3 to its path; the default value is a path in the author's account and must be edited. To train with the default hyperparameters instead, set `USE_TUNED_HYPERPARAMETERS = False`.
+4. Attach the hyperparameters, or train with the defaults. Upload the JSON file of the tuning notebook (section 10) as a Dataset, add it as an input, and set `HYPERPARAMETERS_FILE` in Step 1.3 to its path; the default value is a path in the author's account and must be edited. To train with the default hyperparameters instead, set `USE_TUNED_HYPERPARAMETERS = False`.
 5. Choose the protocol and the other options in the configuration cell (Step 1.3):
 
    | Constant | Meaning | Reported runs |
    |---|---|---|
-   | `CV_SCHEME` | `"hybrid"`, `"grouped"` or `"row"` | `"hybrid"` (H1, H2), `"row"` (R) |
+   | `CV_SCHEME` | `"hybrid"`, `"grouped"` or `"row"` | `"hybrid"` (H2), `"grouped"` (G3), `"row"` (R3, R) |
    | `HYBRID_MIN_ROWS` | used by `"hybrid"`: compounds with more rows than this are split by row | 18 |
-   | `USE_TUNED_HYPERPARAMETERS`, `HYPERPARAMETERS_FILE` | read the JSON file, or use the defaults | `True` for H1 and H2 |
+   | `USE_TUNED_HYPERPARAMETERS`, `HYPERPARAMETERS_FILE` | read the JSON file, or use the defaults | `True` for H2, R3 and G3 |
    | `HYPERPARAMETER_OVERRIDES` | manual overrides applied after the file, for example `{"FTTransformer": {"batch_size": 64}}` | `{}` |
    | `REFERENCE_OOF_DIR` | Dataset with the `oof_*.npy` and `oof_targets.npy` of a row-wise run, for the per-target comparison in Step 15.5; `None` skips it | a Dataset of run R's OOF |
 
@@ -92,6 +92,11 @@ Besides `submission.csv`, the run writes to `/kaggle/working`:
 - `per_target_report_<model>.csv` (one per model and for the blend, Step 15.4), `per_target_row_vs_cv.csv` (Step 15.5), `experiment_logs/*.json`, `eda_summary.png` and `requirements-frozen.txt`.
 
 To use the artifacts, continue with section 8; for the analysis files, with section 11.
+
+### 5.1 The other protocols (`cv-scheme-runs/`)
+
+[`cv-scheme-runs/`](cv-scheme-runs/) contains two copies of the training notebook, run with the same code and the same tuned hyperparameters (`best_hyperparameters_hybrid.json`) as the delivered `moa-training.ipynb` (run H2); only `CV_SCHEME` differs: `"grouped"` in `moa-training-grouped.ipynb` (run G3) and `"row"` in `moa-training-row.ipynb` (run R3). They are run exactly like the training notebook (section 5, steps 1–8; the hyperparameter file attached as an input and `HYPERPARAMETERS_FILE` set to it). Save their OOF files as a Dataset to use them in `moa-fold-diagnostics` (section 11.1). Their Step 15.5 compares the run with the row-wise run R (`REFERENCE_OOF_DIR`), which has default hyperparameters and an earlier code revision: the controlled comparison of the three protocols is the one of the diagnostics notebook, section 7.
+
 
 ## 6. Option B — Run the training notebook fully locally (not on Kaggle)
 
@@ -151,17 +156,17 @@ Run all cells top to bottom (`Run → Run All Cells` in Jupyter Lab, or `Kernel 
 
 ## 7. Expected results of the training notebook (to validate a rerun)
 
-A rerun should give values close to the following (out-of-fold mean log loss, treated rows only). Runs H1 and H2 use the same folds (`CV_SCHEME = "hybrid"`, `HYBRID_MIN_ROWS = 18`, seed 42), so a rerun of either can be compared fold by fold; run R used the `row` protocol, default hyperparameters and an earlier revision of the code.
+A rerun should give values close to the following (out-of-fold mean log loss, treated rows only). Run H2 (`CV_SCHEME = "hybrid"`, `HYBRID_MIN_ROWS = 18`, seed 42) can be compared fold by fold with a rerun. Runs R3 and G3 have the same code and hyperparameters and differ only in `CV_SCHEME`; run R used the `row` protocol, default hyperparameters and an earlier revision of the code.
 
-| Model | R (`row`, defaults) | H1 (`hybrid`, tuning v2) | H2 (`hybrid`, tuning v3) |
-|---|---|---|---|
-| TabularResNet | 0.01632 | 0.01744 | 0.01735 |
-| FT-Transformer | 0.01643 | 0.01736 | 0.01744 |
-| CatBoost | 0.01699 | 0.01782 | 0.01783 |
-| Ensemble (nested) | 0.01607 ± 0.00017 | 0.01714 ± 0.00031 | 0.01715 ± 0.00031 |
-| Final blend weights (ResNet / FT-Transformer / CatBoost) | 0.4529 / 0.3746 / 0.1725 | 0.3705 / 0.405 / 0.2246 | 0.478 / 0.3475 / 0.1745 |
+| Model | R (`row`, defaults) | R3 (`row`, tuned) | H2 (`hybrid`, tuned) | G3 (`grouped`, tuned) |
+|---|---|---|---|---|
+| TabularResNet | 0.01632 | 0.01606 | 0.01735 | 0.01971 |
+| FT-Transformer | 0.01643 | 0.01642 | 0.01744 | 0.01992 |
+| CatBoost | 0.01699 | 0.01701 | 0.01783 | 0.01979 |
+| Ensemble (nested) | 0.01607 ± 0.00017 | 0.01595 ± 0.00016 | 0.01715 ± 0.00031 | 0.01926 ± 0.00099 |
+| Final blend weights (ResNet / FT-Transformer / CatBoost) | 0.4529 / 0.3746 / 0.1725 | 0.6792 / 0.2639 / 0.0569 | 0.478 / 0.3475 / 0.1745 | 0.4893 / 0.151 / 0.3596 |
 
-Run R can be approximated with `CV_SCHEME = "row"` and `USE_TUNED_HYPERPARAMETERS = False`; this combination was not rerun with the current code, so a small difference from the R column is expected. Runs B and C need the hyperparameter files of tuning v2 and v3 (section 10), whose values are listed in the top-level [`README.md`](../README.md).
+Run R can be approximated with `CV_SCHEME = "row"` and `USE_TUNED_HYPERPARAMETERS = False`; this combination was not rerun with the current code, so a small difference from the R column is expected. Runs R3, H2 and G3 need the hyperparameter file of the tuning notebook (section 10); its values are in [`hyperparameters/README.md`](hyperparameters/README.md).
 
 The exploratory analysis (Step 2.3) should report 23,814 rows (21,948 treated, 1,866 control), a positive rate of 0.00373 on treated rows, and 53 of 206 targets with fewer than 20 positives. For the compound structure, `describe_drugs` and Step 14.2b (`hybrid`) should report:
 - 3,288 distinct compounds in the treated rows (median 6 rows, maximum 718, 111 compounds with at least 10 rows); one identifier among the control rows, shared with no treated row;
@@ -169,6 +174,8 @@ The exploratory analysis (Step 2.3) should report 23,814 rows (21,948 treated, 1
 - "Hybrid groups: 2142 rows of 9 frequent drugs (> 18 rows) split row by row; 3279 other drugs kept whole";
 - validation rows per fold `[4386, 4356, 4371, 4383, 4452]`, of which 10.0%, 9.8%, 9.7%, 9.8% and 9.5% have their compound in the training fold;
 - targets without positives in the training fold `[4, 4, 4, 4, 3]` and in the validation fold `[36, 36, 36, 35, 32]`.
+
+For `CV_SCHEME = "grouped"` (run G3), Step 14.2b should report validation rows per fold `[3987, 4136, 5512, 3933, 4380]` (the largest 25.6% above the mean, with a warning that a fold deviates by more than 15%), no validation row whose compound is in the training fold, targets without positives in the training fold `[4, 4, 4, 3, 4]` and in the validation fold `[35, 36, 35, 36, 34]`; the nested blend is 0.01926 ± 0.00099 (mean weighted by the validation rows of each fold). For `CV_SCHEME = "row"` (run R3), Step 14.2b should report validation rows per fold `[4390, 4390, 4389, 4390, 4389]`, a share of validation rows whose compound is in the training fold of 99.2%, 99.3%, 99.4%, 99.4% and 99.6% per fold, targets without positives in the training fold `[0, 1, 0, 1, 0]` and in the validation fold `[2, 1, 2, 1, 2]`; the nested blend is 0.01595 ± 0.00016.
 
 Mixed precision and parallel GPU jobs make runs non-deterministic: expect differences of the order of 1e-5 in the OOF scores of the row-wise code (the noise of the compound-aware runs was not measured) and a few hundredths in the blend weights, not an exact match.
 
@@ -178,7 +185,7 @@ Mixed precision and parallel GPU jobs make runs non-deterministic: expect differ
 
 ### 8.1 What it does
 
-[`moa-inference.ipynb`](moa-inference.ipynb) rebuilds the networks, loads the saved weights, fitted preprocessing pipelines and blend weights, and predicts the test set. It reuses the training code for the feature engineering, the architectures, the pipelines (transform only), the inference and the submission checks, with these differences: the pipeline and CatBoost functions read from `ARTIFACT_DIR` instead of `WORK_DIR`; `sanity_check_submission` also accepts a test set without control rows; all training-only code is removed; and the networks are rebuilt from the architecture arguments stored in `metadata.json` (`model_hyperparameters`) instead of the default sizes. The last point is required for tuned models: the ResNet of runs B and C has 768 hidden units, and loading its weights into a 512-unit network fails. The inference notebook must therefore build the model with
+[`moa-inference.ipynb`](moa-inference.ipynb) rebuilds the networks, loads the saved weights, fitted preprocessing pipelines and blend weights, and predicts the test set. It reuses the training code for the feature engineering, the architectures, the pipelines (transform only), the inference and the submission checks, with these differences: the pipeline and CatBoost functions read from `ARTIFACT_DIR` instead of `WORK_DIR`; `sanity_check_submission` also accepts a test set without control rows; all training-only code is removed; and the networks are rebuilt from the architecture arguments stored in `metadata.json` (`model_hyperparameters`) instead of the default sizes. The last point is required for tuned models: the ResNet of the tuned runs has 768 hidden units, and loading its weights into a 512-unit network fails. The inference notebook must therefore build the model with
 
 ```python
 def _build_model(model_name, input_dim, output_dim):
@@ -201,7 +208,7 @@ It takes about a minute on a GPU, needs no internet, and writes `/kaggle/working
 
    The OOF files and the other outputs of section 5 are **not** part of this Dataset; if they are saved as a separate Dataset for the analysis notebooks, do not attach it to the inference notebook (see 8.3).
 
-The artifacts used for the reported submissions (runs R and C) are private to the author's account: **[moa-artifacts](https://www.kaggle.com/datasets/marcomerlo37/moa-artifacts)**. They can be regenerated at any time by rerunning the training notebook; each run needs its own set.
+The artifacts used for the reported submissions (runs R and H2) are private to the author's account **[TODO: make the Dataset public or share it with the examiner, then delete this sentence]**: **[moa-artifacts](https://www.kaggle.com/datasets/marcomerlo37/moa-artifacts)**. They can be regenerated at any time by rerunning the training notebook; each run needs its own set.
 
 ### 8.3 Run the inference notebook
 
@@ -209,7 +216,7 @@ The artifacts used for the reported submissions (runs R and C) are private to th
 2. **Add Input**: the competition `lish-moa` and the Dataset of artifacts. **Attach no other input that contains a `metadata.json`** (for example the old artifacts of another run, or a Dataset with the OOF files of an analysis): the notebook looks for the folder that contains that file and stops if there are several.
 3. Set **Internet: Off**. Select a GPU accelerator (a CPU-only run works but the FT-Transformer is slow).
 4. Run all cells. The notebook locates the two input folders by file name (`metadata.json` and `test_features.csv`), so no path needs editing. If it does not find exactly one folder for a file, it stops with an explicit message. Step 2.3 compares the installed library versions with those recorded in `metadata.json`. The Kaggle image used for inference may differ from the training one in `python`, `torch` and `numpy` (reported run: Python 3.13 vs. 3.12, `torch` 2.11 vs. 2.10, `numpy` 2.1 vs. 2.0); this is expected and was checked (maximum difference 1.1e-16, section 8.4). A warning is printed only if `scikit-learn` or `catboost` differ, because those two decide whether the pickled pipelines and the CatBoost models load correctly.
-5. Step 9.1 checks that the 50 files listed above exist (check_artifacts); metadata.json, the 51st, is read in Step 2.1. The blend weights printed in Step 2.1 must match those of the training run (for run C: ResNet 0.478, FT-Transformer 0.3475, CatBoost 0.1745). Step 9.5 runs the sanity checks and writes `submission.csv`.
+5. Step 9.1 checks that the 50 files listed above exist (check_artifacts); metadata.json, the 51st, is read in Step 2.1. The blend weights printed in Step 2.1 must match those of the training run (for run H2: ResNet 0.478, FT-Transformer 0.3475, CatBoost 0.1745). Step 9.5 runs the sanity checks and writes `submission.csv`.
 
 ### 8.4 Consistency check
 
@@ -223,18 +230,18 @@ A maximum difference of the order of 1e-16 is expected; differences up to 1e-9�
 
 The challenge is closed, but a notebook can still be submitted as a **late submission** from the competition page (*Late Submission*), selecting a saved version of the inference notebook. Kaggle re-runs it on the hidden test set and scores the resulting predictions. Late submissions do not appear on the leaderboard.
 
-Save the notebook version first (**Save Version → Save & Run All**): the submission uses the saved version, not the open session. Two submissions were made: the row-wise models (run R), and, after the compound-aware protocol and the tuning were fixed, the hybrid models (run C). Hyperparameters were never tuned on the test score; the first submission did motivate the compound-aware protocols (see the top-level [`README.md`](../README.md)).
+Save the notebook version first (**Save Version → Save & Run All**): the submission uses the saved version, not the open session. Two submissions were made: the row-wise models (run R), and, after the compound-aware protocol and the tuning were fixed, the hybrid models (run H2). Hyperparameters were never tuned on the test score; the first submission did motivate the compound-aware protocols (see the top-level [`README.md`](../README.md)).
 
 ### 8.6 Results
 
-| Estimate | Run R | Run C |
+| Estimate | Run R | Run H2 |
 |---|---|---|
 | Nested-CV blend, treated rows only | 0.01607 ± 0.00017 | 0.01715 ± 0.00031 |
 | Nested-CV blend, rescaled to all test rows (× 0.910) | 0.01462 | 0.01561 |
 | Kaggle private score | 0.01634 | 0.01643 |
 | Kaggle public score | 0.01865 | 0.01873 |
 
-The private score is 11.8% above the rescaled CV estimate for run R and 5.3% for run C, so the row-wise estimate was more optimistic. The difference between the two submissions (+9e-5 private, +8e-5 public) is within the noise of a single submission per configuration. See the top-level [`README.md`](../README.md) for the rescaling and the discussion of the gap.
+The private score is 11.8% above the rescaled CV estimate for run R and 5.3% for run H2, so the row-wise estimate was more optimistic. The difference between the two submissions (+9e-5 private, +8e-5 public) is within the noise of a single submission per configuration. See the top-level [`README.md`](../README.md) for the rescaling and the discussion of the gap.
 
 ---
 
@@ -244,24 +251,24 @@ The private score is 11.8% above the rescaled CV estimate for run R and 5.3% for
 `ablated-models/` contains two complete copies of the training notebook, taken at the revision used for the ablation of the main README (row-wise protocol, default hyperparameters, no `train_drug.csv`), with one extra network each: `moa-training-with-MoAMLP.ipynb` (`"mlp"`, three hidden layers 1024-1024-512) and `moa-training-with-MoAConv1D.ipynb` (`"cnn1d"`, dense expansion into a 256×16 pseudo-sequence followed by two 1D convolutions). They are self-contained: run them as they are on Kaggle (section 5, steps 1–3 and 6–8; no hyperparameter file or drug file is needed). They are not used by the delivered training or inference notebooks.
 ---
 
-## 10. Tuning notebooks
+## 10. Tuning notebook
 
-Three versions of the tuning notebook exist. They differ in how a trial is evaluated and in the folds, and the training notebook can use the JSON of any of them. The values that were used, the observations on the searches and the limitations are in the top-level [`README.md`](../README.md#hyperparameter-tuning).
+[`moa-tuning-hybrid.ipynb`](moa-tuning-hybrid.ipynb) tunes the hyperparameters of the three models on compound-aware folds; the JSON file it writes is read by the training notebook (Step 1.5). The values it found, the observations on the search and the limitations are in the top-level [`README.md`](../README.md#hyperparameter-tuning) and in [`hyperparameters/README.md`](hyperparameters/README.md).
 
 | Notebook | Folds | Trials (ResNet / FT-Transformer / CatBoost) | Evaluation of a trial | Output |
 |---|---|---|---|---|
-| [`moa-tuning.ipynb`](moa-tuning.ipynb) (v1) | 5 row-wise folds | 30 / 15 / 10 (CatBoost also limited to 1,200 s) | best epoch on the validation fold that is scored (no inner split) | `best_hyperparameters.json` |
-| [`moa-tuning-row.ipynb`](moa-tuning-row.ipynb) (v2) | folds 0 and 1 of a row-wise split | 25 / 15 / 15 | 10% row-wise inner split for early stopping; the outer fold is scored once | `best_hyperparameters.json`, `tuning_report.json`, `trials_<model>.csv` |
-| [`moa-tuning-hybrid.ipynb`](moa-tuning-hybrid.ipynb) (v3) | folds 0 and 1 of a compound-aware split (`hybrid`, `HYBRID_MIN_ROWS` = 18, own `SPLIT_SEED` = 1234) | 25 / 15 / 15 | 10% compound-aware inner split; confirmation with three paired seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_<model>.csv` |
+| [`moa-tuning-hybrid.ipynb`](moa-tuning-hybrid.ipynb) | folds 0 and 1 of a compound-aware split (`hybrid`, `HYBRID_MIN_ROWS` = 18, own `SPLIT_SEED` = 1234) | 25 / 15 / 15 | 10% compound-aware inner split for early stopping, the outer fold is scored once; confirmation with three paired seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_<model>.csv` |
 
-**What v2 and v3 do.** Stage 1 searches the hyperparameters of each model on fold 0 with Optuna (TPE sampler with `seed=42`, median pruner); the default configuration is enqueued as trial 0, so that it competes in the same study. Stage 2 re-evaluates the best candidates and the default on fold 1 (the top 3 plus the default in v2; the top 2 plus the default, each with the three seeds `CONFIRM_SEEDS`, in v3). A candidate replaces the default only if it passes the adoption rule: in v2, better on both folds with a mean gain of at least `MIN_GAIN` = 5e-5; in v3, a mean gain on the confirmation fold of at least `MIN_GAIN` = 1e-4 **and** a win on more than half of the paired seeds (the search-fold score is reported but not used for the decision, because it is the minimum over the trials). A model for which no candidate passes keeps its default values, which are written to the JSON file. Out-of-memory trials are pruned; other exceptions mark the trial as failed, and the study stops after three consecutive failures. The preprocessing (variance threshold, RankGauss, PCA with 50 and 15 components), the training loop (35 epochs, early-stopping patience 8, label smoothing 0.001) and the CatBoost iterations (250) match the training notebook. `SMOKE_TEST = True` runs a reduced check on a subset of the rows (about 5 minutes according to the v2 notebook) and tags the output files.
+**What it does.** Stage 1 searches the hyperparameters of each model on fold 0 with Optuna (TPE sampler with `seed=42`, median pruner); the default configuration is enqueued as trial 0, so that it competes in the same study. Stage 2 re-evaluates the best 2 candidates and the default on fold 1, each with the three seeds `CONFIRM_SEEDS`. A candidate replaces the default only if it passes the adoption rule: a mean gain on the confirmation fold of at least `MIN_GAIN` = 1e-4 **and** a win on more than half of the paired seeds (the search-fold score is reported but not used for the decision, because it is the minimum over the trials). A model for which no candidate passes keeps its default values, which are written to the JSON file. Out-of-memory trials are pruned; other exceptions mark the trial as failed, and the study stops after three consecutive failures. The preprocessing (variance threshold, RankGauss, PCA with 50 and 15 components), the training loop (35 epochs, early-stopping patience 8, label smoothing 0.001) and the CatBoost iterations (250) match the training notebook. `SMOKE_TEST = True` runs a reduced check on a subset of the rows (about 5 minutes according to the notebook) and tags the output files.
 
-**How to run (Kaggle).** Import the notebook, attach the competition data (including `train_drug.csv` for v3), select a GPU accelerator, set **Internet: On** (the first cell installs `optuna`, `catboost` and `iterative-stratification`), and run all cells. Outputs are written to `/kaggle/working`. The notebooks use one GPU (v2 and v3 use `cuda:0` and run the trials sequentially), so the T4 x2 accelerator brings no speed-up for them. The runtime was not recorded; read `elapsed_minutes` in `tuning_report.json` and the `duration` column of `trials_<model>.csv` (Optuna's standard trial table) after a run.
+**How to run (Kaggle).** Import the notebook, attach the competition data (including `train_drug.csv`), select a GPU accelerator, set **Internet: On** (the first cell installs `iterative-stratification`; `optuna` and `catboost` are only imported, see section 2), and run all cells. Outputs are written to `/kaggle/working`. The notebook uses one GPU (`cuda:0`) and runs the trials sequentially, so the T4 x2 accelerator brings no speed-up. The runtime was not recorded; read `elapsed_minutes` in `tuning_report.json` and the `duration` column of `trials_<model>.csv` (Optuna's standard trial table) after a run.
 
 **Using the result in the training notebook.**
 1. Upload the JSON file as a Kaggle Dataset (or copy it into `WORK_DIR` for a local run).
 2. Point `HYPERPARAMETERS_FILE` to it and keep `USE_TUNED_HYPERPARAMETERS = True` (section 5). Step 1.5 prints a table with the default, the value used and the source of every parameter, so the values that were actually used are always visible in the notebook output.
-3. **File names.** The file written by v2 is `best_hyperparameters.json`; it was renamed `best_hyperparameters_hybrid.json` for run H1, although v2 tunes on row-wise folds. The file written by v3 has the same name natively. To avoid mixing the two, archive the output of v2 as `best_hyperparameters_rowtuned.json` and use `best_hyperparameters_hybrid.json` only for the output of v3.
+3. **File names.** The notebook writes `best_hyperparameters_hybrid.json`, the name of the file in [`hyperparameters/`](hyperparameters/). The default values are in `default_hyperparameters.json` in the same folder.
+
+**Earlier tuning.** A first exploratory tuning cycle on row-wise folds was run before this notebook. It is not preserved in this repository and none of its results is reported, but it informed the search space (see the limitations in the top-level README).
 
 ---
 
@@ -275,7 +282,7 @@ Descriptive diagnostics of a compound-aware run, without GPU and without retrain
 
 - **Inputs:** `RUN_DIR` (the OOF files above; set it explicitly if several attached Datasets contain `cv_fold_of_row.npy`), `ROW_RUN_DIR` (OOF of a row-wise run, for section 7), optionally `EXTRA_RUN_DIRS` (label → folder). `FREQUENT_MIN_ROWS` must equal the `HYBRID_MIN_ROWS` of the run. The Kaggle scores and `TEST_TREATED_SHARE` used for the back-of-the-envelope inference of section 7 are constants of the notebook.
 - **Internet:** on, for `pip install iterative-stratification` (needed by section 6).
-- **Output:** printed tables. Reference values for run H0 are in the top-level [`README.md`](../README.md#row-wise-against-compound-aware-cv).
+- **Output:** printed tables. For the controlled comparison of the protocols set `RUN_DIR` to the OOF files of run H2, `ROW_RUN_DIR` to those of run R3, `EXTRA_RUN_DIRS` to `{"grouped": <OOF files of run G3>}` and `FREQUENT_MIN_ROWS = 18`; the reference values are in the top-level [`README.md`](../README.md#row-wise-against-compound-aware-cv).
 
 ### 11.2 `moa-blend-offline.ipynb`
 
@@ -305,6 +312,6 @@ Offline test of a nearest-neighbour override for the rows of frequent compounds.
 
 ## 12. Notes
 
-- The delivered notebooks and their PDF exports come from single clean runs (*Restart & Run All*) on Kaggle, so cells are numbered from 1. The delivered training notebook corresponds to run C (compound-aware `hybrid` protocol, hyperparameters of tuning v3).
+- The delivered notebooks and their PDF exports come from single clean runs (*Restart & Run All*) on Kaggle, so cells are numbered from 1. The delivered training notebook corresponds to run H2 (compound-aware `hybrid` protocol, tuned hyperparameters); its copies in `cv-scheme-runs/` correspond to runs G3 and R3.
 - The training notebook reproduces the cross-validated scores above. The Kaggle test scores were measured with the inference notebook, once per configuration (section 8.6). The compound-aware protocols use `train_drug.csv`; whether the hidden test set shares compounds with the training set cannot be verified directly, and the indirect analysis of section 11.3 settles it only for the frequent compounds. See the top-level README for the limitations.
 - Model checkpoints and fold-level preprocessing artefacts (`*.pth`, `*.joblib`, `*.cbm`) are written to `WORK_DIR` during the training run. They are not part of this repository, are the input of the inference notebook (section 8), and are safe to delete between training runs. The training notebook clears stale fold pipelines at the start of each run. The OOF files (section 5) are overwritten by each run: save them as a Dataset before starting another run if they are needed for comparisons.

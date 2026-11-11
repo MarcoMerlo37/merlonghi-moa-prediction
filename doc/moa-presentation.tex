@@ -39,6 +39,7 @@
 
 \newcommand{\metric}[1]{\textcolor{MoATeal}{\textbf{#1}}}
 \newcommand{\smallnote}[1]{{\tiny\textit{#1}}}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 
 \begin{document}
 
@@ -69,7 +70,7 @@ Does the validation score estimate generalisation to compounds that were not see
 \begin{itemize}
   \item Reproducible cross-validated pipeline; compare neural and tree models; seed bagging.
   \item Compound-aware validation, and a measure of how optimistic row-wise CV is.
-  \item Tuning that never selects on the scored fold; ensemble re-validated by nested CV.
+  \item Tuning whose epoch selection never uses the scored fold (candidates picked on fold 0, adoption decided on fold 1); ensemble re-validated by nested CV.
 \end{itemize}
 \end{frame}
 
@@ -104,25 +105,27 @@ Does the validation score estimate generalisation to compounds that were not see
 % 4
 \begin{frame}{Runs and Notation}
 \small
-Results refer to three training runs (all with the same code structure, 5 folds, 3-seed bagging):
+Results refer to the following training runs (all with 5 folds and 3-seed bagging):
 \vspace{0.3em}
 
 \begin{tabular}{llllc}
 \toprule
 \textbf{Run} & \textbf{CV protocol} & \textbf{Hyperparameters} & \textbf{Kaggle} & \textbf{Time (2$\times$T4)}\\
 \midrule
-R  & row-wise & defaults & yes & $\approx$130 min\\
-H1 & hybrid (compound-aware) & tuning v2 (row-wise folds) & no & 75 min\\
-H2 & hybrid (compound-aware) & tuning v3 (compound-aware folds) & yes & 95 min\\
+R  & row-wise & defaults, earlier code & yes & $\approx$130 min\\
+R3 & row-wise & tuned & no & 117 min\\
+H2 & hybrid (compound-aware) & tuned & yes & 95 min\\
+G3 & grouped (compound-aware) & tuned & no & 90 min\\
 \bottomrule
 \end{tabular}
 \vspace{0.5em}
 \begin{itemize}
-  \item H0: an earlier hybrid run (nested blend 0.01720), used only in the fold and compound diagnostics.
-  \item \textbf{Deliverables} (Python notebooks): training, inference, three tuning versions, fold diagnostics, offline blend, test-overlap analysis, nearest-neighbour override test.
+  \item \textbf{R3, H2, G3: same code and same tuned hyperparameters, only the CV protocol differs}: the controlled comparison (slide 13). R is not part of it.
+  \item H0 and G0: earlier hybrid and grouped runs with default hyperparameters (nested blend 0.01720 and 0.01957), used only in the diagnostics and in the tuned-versus-default comparison.
+  \item \textbf{Deliverables} (Python notebooks): training (and two copies for the other protocols), inference, tuning, fold diagnostics, offline blend, test-overlap analysis, nearest-neighbour override test.
   \item Training and inference are separate: the training notebook saves the artifacts, the inference notebook writes \texttt{submission.csv} without retraining.
 \end{itemize}
-\smallnote{R used an earlier code revision; this matters for the interpretation of the R versus H comparison (slide 13).}
+\smallnote{R used an earlier code revision and default hyperparameters: this matters for the interpretation of R against the other runs (slide 13).}
 \end{frame}
 
 % 5
@@ -194,15 +197,16 @@ H2 & hybrid (compound-aware) & tuning v3 (compound-aware folds) & yes & 95 min\\
 All protocols: 5-fold iterative multilabel stratification~\cite{strat,itstrat} on treated rows; the compound id comes from \texttt{train\_drug.csv}.
 \vspace{0.3em}
 
-\begin{tabular}{p{0.13\textwidth} p{0.2\textwidth} p{0.5\textwidth}}
+\begin{tabular}{p{0.11\textwidth} p{0.17\textwidth} p{0.40\textwidth} p{0.14\textwidth}}
 \toprule
-\textbf{Protocol} & \textbf{Unit kept together} & \textbf{Main property}\\
+\textbf{Protocol} & \textbf{Unit kept together} & \textbf{Main property} & \textbf{Nested blend}\\
 \midrule
-\texttt{row} & single row & 99.4\% of validation rows have their compound in the training fold.\\
-\texttt{grouped} & whole compound & No overlap, but compounds have up to 718 rows: fold sizes deviate up to 25.6\%.\\
-\texttt{hybrid} & compound, except those with $>18$ rows (split by row) & 9 compounds (9.8\% of rows) split by row; fold sizes within 1.4\%; 9.8\% of validation rows share their compound with training.\\
+\texttt{row} & single row & 99.4\% of validation rows have their compound in the training fold. & 0.01595\\
+\texttt{grouped} & whole compound & No overlap, but compounds have up to 718 rows: fold sizes deviate up to 25.6\%. & 0.01926\\
+\texttt{hybrid} & compound, except those with $>18$ rows (split by row) & 9 compounds (9.8\% of rows) split by row; fold sizes within 1.4\%; 9.8\% of validation rows share their compound with training. & 0.01715\\
 \bottomrule
 \end{tabular}
+\smallnote{Nested blend: same code and tuned hyperparameters (runs R3, G3, H2).}
 \vspace{0.4em}
 \begin{block}{Why hybrid?}
 Pure grouping is unbalanced and pessimistic for targets dominated by a few very large compounds; hybrid trades compound separation for balanced folds. The threshold is a \emph{design choice}, not a proven optimum.
@@ -253,13 +257,14 @@ hybrid, $>30$, $60$ or $100$ rows & 9.7\% & 2.8\% & 9.7\%\\
 \begin{block}{Final weights (ResNet / FT / CatBoost)}
 \small
 R: 0.453 / 0.375 / 0.173\\
-H1: 0.371 / 0.405 / 0.225\\
-H2: 0.478 / 0.348 / 0.175
+R3: 0.679 / 0.264 / 0.057\\
+H2: 0.478 / 0.348 / 0.175\\
+G3: 0.489 / 0.151 / 0.360
 \end{block}
 \column{0.46\textwidth}
 \begin{block}{Optimism of the blending step}
 \small
-In-sample minus nested score: $1.6\cdot10^{-6}$ (R), $2.8\cdot10^{-6}$ (H1), $2.6\cdot10^{-6}$ (H2): negligible with three weights.
+In-sample minus nested score: $1.6\cdot10^{-6}$ (R), $2.6\cdot10^{-6}$ (H2), $4.5\cdot10^{-5}$ (G3, unequal folds): small against the difference between protocols.
 \end{block}
 \end{columns}
 \vspace{0.3em}
@@ -267,25 +272,24 @@ In-sample minus nested score: $1.6\cdot10^{-6}$ (R), $2.8\cdot10^{-6}$ (H1), $2.
 \end{frame}
 
 % 10
-\begin{frame}{Hyperparameter Tuning: Three Versions}
+\begin{frame}{Hyperparameter Tuning}
 \small
-Optuna~\cite{optuna} with TPE sampler~\cite{tpe} and median pruner; the default configuration is trial 0 of every study (v2, v3).
+Optuna~\cite{optuna} with TPE sampler~\cite{tpe} and median pruner, on compound-aware (hybrid) folds with their own split seed; the default configuration is trial 0 of every study.
 \vspace{0.3em}
 
-\begin{tabular}{p{0.07\textwidth} p{0.2\textwidth} p{0.3\textwidth} p{0.3\textwidth}}
+\begin{tabular}{p{0.14\textwidth} p{0.06\textwidth} p{0.34\textwidth} p{0.3\textwidth}}
 \toprule
- & \textbf{Folds} & \textbf{Model selection in a trial} & \textbf{Adoption rule}\\
+\textbf{Stage} & \textbf{Fold} & \textbf{What is done} & \textbf{Model selection in a trial}\\
 \midrule
-v1 & 5 row-wise & best epoch on the \emph{scored} fold (flawed, not used by any reported run) & lowest mean loss\\
-v2 & fold 0 search, fold 1 confirm (row-wise) & 10\% inner split & better than default on both folds, gain $\ge 5\cdot10^{-5}$\\
-v3 & as v2, compound-aware, own split seed & 10\% compound-aware inner split & gain $\ge 10^{-4}$ on the confirmation fold \emph{and} wins on more than half of 3 paired seeds\\
+1, search & 0 & 25/15/15 trials (ResNet/CatBoost/FT), one seed per trial & 10\% compound-aware inner split; the outer fold is scored once\\
+2, confirmation & 1 & best 2 candidates and the default, 3 paired seeds & as above\\
 \bottomrule
 \end{tabular}
 \vspace{0.4em}
 \begin{itemize}
-  \item v3 decides only on the confirmation fold: the search-fold score is the minimum over $N$ trials, hence biased.
-  \item Search: 25/15/15 trials for ResNet/FT/CatBoost, one seed per trial.
-  \item v3 found no FT-Transformer candidate better than the default: it keeps default values.
+  \item \textbf{Adoption rule}: gain $\ge 10^{-4}$ on the confirmation fold \emph{and} wins on more than half of the 3 paired seeds. The search-fold score is the minimum over $N$ trials, hence biased, and is not used.
+  \item No FT-Transformer candidate beat the default: it keeps default values.
+  \item An earlier exploratory cycle on row-wise folds (notebook not preserved, no result reported) informed the search space: it counts among the sources of optimism of the tuned runs.
 \end{itemize}
 \end{frame}
 
@@ -297,25 +301,25 @@ v3 & as v2, compound-aware, own split seed & 10\% compound-aware inner split & g
 \setlength{\tabcolsep}{6pt}
 \renewcommand{\arraystretch}{1.2}
 
-\begin{tabular}{llccc}
+\begin{tabular}{llcc}
 \toprule
-\textbf{Model} & \textbf{Parameter} & \textbf{Default} & \textbf{H1 (v2)} & \textbf{H2 (v3)}\\
+\textbf{Model} & \textbf{Parameter} & \textbf{Default} & \textbf{Tuned (H2, R3, G3)}\\
 \midrule
 
 \multirow{4}{*}{ResNet}
- & Learning rate & $10^{-3}$ & $1.18\cdot10^{-3}$ & $2.67\cdot10^{-3}$\\
- & Dropout & 0.2 & 0.427 & 0.583\\
- & Weight decay & $10^{-5}$ & $8.5\cdot10^{-6}$ & $2.66\cdot10^{-4}$\\
- & Hidden units / batch & 512 / 256 & 768 / 128 & 768 / 512\\
+ & Learning rate & $10^{-3}$ & $2.67\cdot10^{-3}$\\
+ & Dropout & 0.2 & 0.583\\
+ & Weight decay & $10^{-5}$ & $2.66\cdot10^{-4}$\\
+ & Hidden units / batch & 512 / 256 & 768 / 512\\
 
 \midrule
 FT-Transformer
- & LR / dropout / WD & $10^{-3}$ / 0.2 / $10^{-5}$ & $2.35\cdot10^{-3}$ / 0.063 / $9.9\cdot10^{-6}$ & Default\\
+ & all parameters & default & Default\\
 
 \midrule
 \multirow{2}{*}{CatBoost}
- & Depth / L2 & 5 / 3 & 4 / 19.0 & 4 / 56.0\\
- & LR / subsample & 0.08 / -- & 0.1034 / 0.829 & 0.1034 / 0.829\\
+ & Depth / L2 & 5 / 3 & 4 / 56.0\\
+ & LR / subsample & 0.08 / -- & 0.1034 / 0.829\\
 
 \bottomrule
 \end{tabular}
@@ -324,8 +328,8 @@ FT-Transformer
 \raggedright
 \small
 \begin{itemize}
-  \item In v3, ResNet dropout (0.583), batch size (512) and learning rate ($2.67\cdot10^{-3}$) lie at or near the search-space bounds.\\ The optimum may be outside the search space.
-  \item CatBoost learning rate and subsample coincide in H1 and H2 (same seeded sampler draw); OOF does not change (0.01782 vs 0.01783).
+  \item ResNet dropout (0.583), batch size (512) and learning rate ($2.67\cdot10^{-3}$) lie at or near the search-space bounds, and so does the CatBoost L2.\\ The optimum may be outside the search space.
+  \item The values were selected on hybrid folds: they may favour the hybrid protocol over row-wise and grouped.
 \end{itemize}
 \end{frame}
 
@@ -336,69 +340,82 @@ Out-of-fold log loss on treated rows (lower is better); networks use seed-averag
 \vspace{0.2em}
 
 \centering
-\begin{tabular}{lccc}
+\footnotesize
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Model} & \textbf{R: row/default} & \textbf{H1: hybrid/v2} & \textbf{H2: hybrid/v3}\\
+\textbf{Model} & \textbf{R: row/defaults} & \textbf{R3: row/tuned} & \textbf{H2: hybrid/tuned} & \textbf{G3: grouped/tuned}\\
 \midrule
-Baseline (per-target prior) & 0.02220 & 0.02233 & 0.02233\\
-TabularResNet & 0.01632 & 0.01744 & 0.01735\\
-FT-Transformer & 0.01643 & 0.01736 & 0.01744\\
-CatBoost & 0.01699 & 0.01782 & 0.01783\\
+Baseline (per-target prior) & 0.02220 & 0.02220 & 0.02233 & 0.02370\\
+TabularResNet & 0.01632 & 0.01606 & 0.01735 & 0.01971\\
+FT-Transformer & 0.01643 & 0.01642 & 0.01744 & 0.01992\\
+CatBoost & 0.01699 & 0.01701 & 0.01783 & 0.01979\\
 \midrule
-\textbf{Nested ensemble} & \textbf{0.01607 $\pm$ 0.00017} & \textbf{0.01714 $\pm$ 0.00031} & \textbf{0.01715 $\pm$ 0.00031}\\
+\textbf{Nested ensemble} & \textbf{0.01607 $\pm$ 0.00017} & \textbf{0.01595 $\pm$ 0.00016} & \textbf{0.01715 $\pm$ 0.00031} & \textbf{0.01926 $\pm$ 0.00099}\\
 \bottomrule
 \end{tabular}
 \vspace{0.4em}
 
 \raggedright
+\small
 \begin{itemize}
-  \item Ensemble improves on the best single model by about 1.5\% (R) and 1.2\% (H2).
-  \item \textbf{Each model contributes} (H2, drop-one nested blend): without ResNet $+1.2\cdot10^{-4}$, without FT $+0.8\cdot10^{-4}$, without CatBoost $+0.6\cdot10^{-4}$; removing any one worsens the score in all five folds.
-  \item Residual correlations are high (0.98 between networks); CatBoost is the most different on positive cells (0.945).
+  \item Ensemble improves on the best single model by about 1.5\% (R), 0.7\% (R3), 1.2\% (H2) and 2.3\% (G3).
+  \item \textbf{Each model contributes under hybrid} (H2, drop-one nested blend): without ResNet $+1.2\cdot10^{-4}$, without FT $+0.8\cdot10^{-4}$, without CatBoost $+0.6\cdot10^{-4}$; removing any one worsens the score in all five folds.
+  \item \textbf{Under grouped (G3) the FT-Transformer adds nothing}: $+1\cdot10^{-5}$ when removed (weight 0.15), against $+2.2\cdot10^{-4}$ (ResNet) and $+2.1\cdot10^{-4}$ (CatBoost); no model helps in all five folds.
+  \item Residual correlations are high (0.98 between networks); CatBoost is the most different on positive cells (0.945 in H2, 0.81 in G3).
 \end{itemize}
 \end{frame}
 
 % 13
 \begin{frame}{Row-Wise versus Compound-Aware CV}
 \small
-\begin{alertblock}{Not a controlled comparison}
-The $+6.7\%$ from R (0.01607) to H2 (0.01715) also reflects code revision, hyperparameters and fold assignment.
+\begin{alertblock}{Controlled comparison: R3, H2, G3}
+Same code, seeds and tuned hyperparameters; only the folds change. R (defaults, earlier code) is not part of it: R to H2 ($+6.7\%$) and R to G3 ($+19.9\%$) also reflect hyperparameters and code.
 \end{alertblock}
-\vspace{0.2em}
-Paired decomposition (blend; run H0 against the row-wise OOF, same rows), bootstrap over compounds:
-\vspace{0.2em}
 
 \centering
-\begin{tabular}{lcccc}
+\footnotesize
+\begin{tabular}{lccc}
 \toprule
-\textbf{Rows} & \textbf{Share} & \textbf{Loss row-wise} & \textbf{Loss hybrid} & \textbf{Contribution to gap}\\
+ & \textbf{R3 (row)} & \textbf{H2 (hybrid)} & \textbf{G3 (grouped)}\\
 \midrule
-Frequent compounds & 9.8\% & 0.00172 & 0.00198 & $+0.00003$\\
-All other rows & 90.2\% & 0.01762 & 0.01885 & $+0.00111$\\
+Validation rows with seen compound & 99.4\% & 9.8\% & 0\%\\
+Nested blend (against H2) & 0.01595 ($-7.0\%$) & 0.01715 & 0.01926 ($+12.3\%$)\\
 \bottomrule
 \end{tabular}
 
-\vspace{0.4em}
+\vspace{0.3em}
+Paired decomposition by compound frequency (blend, bootstrap over compounds; diagnostics, section 7):
+\vspace{0.1em}
+
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Rows} & \textbf{Share} & \textbf{R3} & \textbf{H2} & \textbf{G3}\\
+\midrule
+Frequent compounds & 9.8\% & 0.00165 & 0.00198 & 0.02260\\
+All other rows & 90.2\% & 0.01750 & 0.01879 & 0.01884\\
+\bottomrule
+\end{tabular}
+
+\vspace{0.2em}
 \raggedright
+\small
 \begin{itemize}
-  \item On ordinary compounds: $+0.00123$ per row ($+7.0\%$), 95\% interval over compounds $[+0.00112,+0.00135]$.
-  \item Almost the whole difference sits on rows that hybrid CV evaluates as \emph{unseen}.
-  \item The worst hybrid fold (fold 4, $+4.7\%$) is \emph{not} explained by frequent compounds: fold spread 0.00091 on all rows, 0.00095 without them.
-  \item Labels are identical across all rows of each of the 8 largest compounds; e.g.\ 98.9\% of \texttt{proteasome\_inhibitor} positives come from one compound.
+  \item Ordinary compounds carry $+0.00116$ of the $+0.00119$ from R3 to H2 ($+7.4\%$, 95\% CI $[+0.00116,+0.00143]$); the frequent ones carry $+0.00201$ of the $+0.00206$ from H2 to G3.
+  \item Under grouped, targets carried by few compounds lose most skill against R: \texttt{hmgcr\_inhibitor} (283 positives, 7 compounds) $0.834\to0.217$.
 \end{itemize}
 \end{frame}
 
 % 14
-\begin{frame}{Per-Target Analysis (H2 blend)}
+\begin{frame}{Per-Target Analysis (blend)}
 \begin{columns}[T,onlytextwidth]
 \column{0.52\textwidth}
 \small
-\textbf{Skill} $=1-\text{loss}/\text{loss of the per-target prior}$, by number of positives (row-wise vs hybrid):
+\textbf{Skill} $=1-\text{loss}/\text{loss of the per-target prior}$, by number of positives (row-wise, hybrid, grouped):
 \vspace{0.3em}
 
 \begin{tikzpicture}
 \begin{axis}[
-  ybar, width=\textwidth, height=5.2cm, bar width=7pt,
+  ybar, width=\textwidth, height=5.2cm, bar width=5pt,
   ymin=0, ymax=0.42, ylabel={skill}, ylabel style={font=\scriptsize},
   xtick={1,2,3,4,5}, xticklabels={5--9,10--19,20--49,50--99,100+},
   xlabel={positives per target}, xlabel style={font=\scriptsize},
@@ -408,7 +425,8 @@ All other rows & 90.2\% & 0.01762 & 0.01885 & $+0.00111$\\
 ]
 \addplot[fill=MoAOrange!80, draw=none] coordinates {(1,0.064) (2,0.145) (3,0.121) (4,0.180) (5,0.374)};
 \addplot[fill=MoABlue!80, draw=none] coordinates {(1,0.123) (2,0.068) (3,0.061) (4,0.120) (5,0.342)};
-\legend{row-wise (R), hybrid (H2)}
+\addplot[fill=MoATeal!80, draw=none] coordinates {(1,0.112) (2,0.022) (3,0.040) (4,0.100) (5,0.274)};
+\legend{row-wise (R), hybrid (H2), grouped (G3)}
 \end{axis}
 \end{tikzpicture}
 
@@ -417,7 +435,7 @@ All other rows & 90.2\% & 0.01762 & 0.01885 & $+0.00111$\\
 \small
 \begin{itemize}
   \item The 41 targets with $\ge100$ positives carry 47.9\% of the loss (skill 0.342).
-  \item The 53 \emph{rare} targets ($<20$ positives) carry 6.6\% of the loss; skill $+0.080$ [0.056, 0.102]; for 8 of them the model does not beat the prior.
+  \item The 53 \emph{rare} targets ($<20$ positives) carry 6.6\% of the loss; skill $+0.080$ [0.056, 0.102] in H2 (G3: $+0.044$ [$-0.013$, 0.085]); for 8 of them the model does not beat the prior.
   \item The blend over-predicts rare targets: expected/observed positives 1.47 below 20 positives.
   \item 31 targets with $\ge10$ positives come from at most 3 compounds: close to compound-identity labels.
 \end{itemize}
@@ -427,31 +445,33 @@ All other rows & 90.2\% & 0.01762 & 0.01885 & $+0.00111$\\
 % 15
 \begin{frame}{Independent Check: Kaggle Test Set}
 \small
-Two late submissions through the inference notebook (one per configuration).
+Two late submissions through the inference notebook (runs R and H2); the CV estimates of R3 and G3 are compared with the same scores.
 \vspace{0.3em}
 
 \centering
-\begin{tabular}{lcc}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lcccc}
 \toprule
- & \textbf{R} & \textbf{H2}\\
+ & \textbf{R} & \textbf{R3} & \textbf{H2} & \textbf{G3}\\
 \midrule
-Nested-CV blend, treated rows & 0.01607 & 0.01715\\
-Rescaled to all test rows ($\times0.910$) & 0.01462 & 0.01561\\
-Kaggle private & 0.01634 & 0.01643\\
-Kaggle public & 0.01865 & 0.01873\\
-Private above rescaled CV & $+11.8\%$ & $+5.3\%$\\
-Public above rescaled CV & $+27.5\%$ & $+20.0\%$\\
+Nested-CV blend, treated rows & 0.01607 & 0.01595 & 0.01715 & 0.01926\\
+Rescaled to all test rows ($\times0.910$) & 0.01462 & 0.01452 & 0.01561 & 0.01753\\
+Kaggle private & 0.01634 & -- & 0.01643 & --\\
+Kaggle public & 0.01865 & -- & 0.01873 & --\\
+Private (R / H2) above rescaled CV & $+11.8\%$ / $+12.4\%$ & $+12.5\%$ / $+13.2\%$ & $+4.7\%$ / $+5.3\%$ & $-6.8\%$ / $-6.3\%$\\
 \bottomrule
 \end{tabular}
 \vspace{0.4em}
 
 \raggedright
+\small
 \begin{itemize}
-  \item Hybrid CV is closer to the private score and reproduces about 57\% of the gap between the row-wise estimate and the private score. This is indirect evidence, not a proof.
+  \item \textbf{Both private scores lie between the hybrid and the grouped estimates}: hybrid CV is slightly optimistic, grouped CV pessimistic (it reproduces 169\% of the gap from the row-wise estimate, hybrid 57\%). Which is closer depends on the unknown overlap of ordinary compounds: indirect evidence only.
   \item The two submissions differ by $9\cdot10^{-5}$ (private) and $8\cdot10^{-5}$ (public): \textbf{they cannot be ranked}; protocol, tuning and model selection did not move the test score measurably.
   \item Public and private scores differ by 0.0023 for \emph{both}: the test subsets differ in difficulty.
 \end{itemize}
-\smallnote{The test set was never used to tune or select; it did motivate the compound-aware protocols. The rescaling uses the public treated share (0.910): approximate.}
+\smallnote{The test set was never used to tune or select; it did motivate the compound-aware protocols. The rescaling uses the public treated share (0.910): approximate. R3 and G3 were never submitted.}
 \end{frame}
 
 % 16
@@ -527,12 +547,13 @@ More components or compound-specific post-processing gave no robust gain on the 
 % 18
 \begin{frame}{Limitations}
 \small
-\begin{enumerate}
-  \item \textbf{Test compound ids unknown:} overlap is inferred only for frequent compounds; ordinary-compound overlap is unassessed, so neither hybrid nor pure grouped CV can be declared the faithful one.
+\begin{enumerate}\setlength{\itemsep}{0pt}
+  \item \textbf{Test compound ids unknown:} overlap is inferred only for frequent compounds; ordinary-compound overlap is unassessed, so neither hybrid nor grouped CV can be declared the faithful one (they bracket the private score).
   \item \textbf{Hybrid threshold is heuristic:} 18 rows chosen from fold balance for one seed; CV-loss sensitivity not measured.
-  \item \textbf{Non-controlled protocol comparison:} R and H runs differ in code, hyperparameters and folds.
-  \item \textbf{Selection bias:} tuning and model choices reused folds overlapping the reported OOF; no untouched hold-out; nested selection of the whole procedure was too costly.
-  \item \textbf{Limited tuning:} one seed per trial, few trials, optimum possibly outside the ResNet search space; no controlled tuned-vs-default comparison under hybrid CV.
+  \item \textbf{Comparison of protocols:} only R3, H2 and G3 are comparable (one run each); R used defaults and an earlier code revision. The tuned values were chosen on hybrid folds and may favour that protocol.
+  \item \textbf{Grouped CV is unbalanced:} folds of 3933--5512 rows, 34--36 targets without validation positives, noisier nested score; a pessimistic bound, not a faithful estimate.
+  \item \textbf{Selection bias:} tuning and model choices reused folds overlapping the reported OOF; no untouched hold-out.
+  \item \textbf{Limited tuning:} one seed per trial, few trials, optimum possibly outside the ResNet search space; an earlier exploratory cycle (row-wise folds, not preserved, not reported) informed the search space; no controlled tuned-versus-default comparison.
   \item \textbf{Preprocessing:} unsupervised transforms include inner-validation rows; may slightly affect early stopping.
   \item \textbf{Test evidence:} two submissions, noisy and different public/private subsets; fold standard deviation (0.0003) understates the uncertainty on unseen data.
   \item \textbf{Reproducibility:} GPU non-determinism ($\approx10^{-5}$); inference needs the separately saved artifact dataset.
@@ -543,9 +564,9 @@ More components or compound-specific post-processing gave no robust gain on the 
 \begin{frame}{Conclusions}
 \begin{itemize}
   \item A reproducible training/inference workflow for a sparse 206-target multi-label task, with separated notebooks and saved artifacts.
-  \item Compound-aware CV exposes a harder generalisation setting than row-wise CV: the extra loss sits almost entirely on ordinary compounds that become ``unseen''.
-  \item The three-model ensemble beats each component in the nested-CV experiments (each model helps in all five folds).
-  \item Tuning did not measurably improve the hybrid ensemble; the two Kaggle submissions cannot be ranked against each other.
+  \item Compound-aware CV exposes a harder generalisation setting than row-wise CV: with the same code and hyperparameters the nested loss goes from 0.01595 (row) to 0.01715 (hybrid) and 0.01926 (grouped), and the two compound-aware protocols bracket the private score.
+  \item The three-model ensemble beats each component in the nested-CV experiments; under hybrid CV each model helps in all five folds, under grouped CV the FT-Transformer adds nothing.
+  \item Tuning did not measurably improve the hybrid ensemble ($-5\cdot10^{-5}$ against defaults) and helped the grouped one slightly ($-3.1\cdot10^{-4}$, not proven); the two Kaggle submissions cannot be ranked against each other.
   \item Nearest-neighbour post-processing and extra networks brought no gain: simplicity was preferred.
 \end{itemize}
 \vspace{0.5em}

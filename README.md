@@ -10,7 +10,7 @@ This project addresses the Kaggle **Mechanisms of Action (MoA) Prediction** chal
 - Data: <https://www.kaggle.com/competitions/lish-moa/data>
 
 
-The solution is delivered as a **training** notebook, which cross-validates the models and saves them, and an **inference** notebook, which loads the saved models and produces the Kaggle submission (see [`software/`](/software/)). Around them sit three **tuning** notebooks, a **fold and compound diagnostics** notebook and three **offline analysis** notebooks, which document how the cross-validation protocol and the hyperparameters were investigated (see [Notebooks](#notebooks)). Two models were submitted to the Kaggle test set as late submissions: the first was trained with row-wise cross-validation and default hyperparameters (run R), the second with the compound-aware hybrid cross-validation and tuned hyperparameters (run H2) (see [Results](#results)).
+The solution is delivered as a **training** notebook, which cross-validates the models and saves them, and an **inference** notebook, which loads the saved models and produces the Kaggle submission (see [`software/`](/software/)). Around them sit one **tuning** notebook, two copies of the training notebook for the other cross-validation protocols, a **fold and compound diagnostics** notebook and three **offline analysis** notebooks, which document how the cross-validation protocol and the hyperparameters were investigated (see [Notebooks](#notebooks)). Two models were submitted to the Kaggle test set as late submissions: the first was trained with row-wise cross-validation and default hyperparameters (run R), the second with the compound-aware hybrid cross-validation and tuned hyperparameters (run H2) (see [Results](#results)). Two further runs with the same code and the same tuned hyperparameters as H2, one per remaining protocol (R3 with `row`, G3 with `grouped`), make the comparison of the three cross-validation protocols controlled.
 
 ### Data in brief
 
@@ -26,8 +26,8 @@ Figures from the exploratory analysis in the training notebook (Step 2.3 and `de
 - Build a robust cross-validated pipeline for a large-scale, highly imbalanced multi-label classification problem.
 - Compare several modelling paradigms on the same folds: a residual tabular network (TabularResNet), an attention-based FT-Transformer [2], and a gradient-boosted tree model (CatBoost) [3], each fed a preprocessing pipeline suited to it.
 - Reduce variance through multi-seed bagging and 5-fold multilabel-stratified cross validation [4, 5], and combine the base models with an ensemble whose weights are learned and re-validated through nested cross-validation.
-- Make the cross-validation compound-aware: use `train_drug.csv` to build folds that keep a compound in a single fold (three protocols: `row`, `grouped`, `hybrid`), and quantify how optimistic the row-wise estimate was.
-- Tune the hyperparameters of the three models with Optuna [12, 13] under a protocol that never uses the outer validation fold for model selection, and test whether tuning matters under the compound-aware cross-validation.
+- Make the cross-validation compound-aware: use `train_drug.csv` to build folds that keep a compound in a single fold (three protocols: `row`, `grouped`, `hybrid`), and quantify how optimistic the row-wise estimate was, comparing the three protocols with the same code and the same hyperparameters.
+- Tune the hyperparameters of the three models with Optuna [12, 13] with a protocol in which the epoch of a trial is never selected on the scored fold (candidates are picked on one fold and their adoption is decided on a second one), and test whether tuning matters under the compound-aware cross-validation.
 - Check the cross-validated estimate against an independent measure: the Kaggle test set (two late submissions; see [Results](#independent-check-on-the-kaggle-test-set) for how it was and was not used).
 - Produce a clean, reproducible, well-documented deliverable (see [`software/`](/software/)).
 
@@ -37,26 +37,30 @@ All notebooks are in [`software/`](/software/); setup and run instructions are i
 
 | Notebook | Role | Main outputs |
 |---|---|---|
-| [`moa-training.ipynb`](/software/moa-training.ipynb) | Training and cross-validation of ResNet, FT-Transformer and CatBoost under `CV_SCHEME` = `hybrid` (default), `grouped` or `row`; hyperparameters read from a JSON file (Step 1.5); nested-CV blend; per-target error analysis (Step 15.4) and CV-protocol diagnostics (Step 15.5) | 51 artifacts for inference, `submission.csv`, OOF predictions (`oof_*.npy`), fold and compound bookkeeping, per-target reports |
+| [`moa-training.ipynb`](/software/moa-training.ipynb) | Training and cross-validation of ResNet, FT-Transformer and CatBoost under `CV_SCHEME` = `hybrid` (default), `grouped` or `row`; hyperparameters read from a JSON file (Step 1.5); the saved outputs are those of run H2; nested-CV blend; per-target error analysis (Step 15.4) and CV-protocol diagnostics (Step 15.5) | 51 artifacts for inference, `submission.csv`, OOF predictions (`oof_*.npy`), fold and compound bookkeeping, per-target reports |
+| [`moa-training-grouped.ipynb`](/software/cv-scheme-runs/moa-training-grouped.ipynb) | Copy of the training notebook with `CV_SCHEME = "grouped"` and the tuned hyperparameters (run G3); same code as `moa-training.ipynb`, only the protocol differs | OOF predictions and per-target reports of G3 |
+| [`moa-training-row.ipynb`](/software/cv-scheme-runs/moa-training-row.ipynb) | Copy of the training notebook with `CV_SCHEME = "row"` and the tuned hyperparameters (run R3) | OOF predictions and per-target reports of R3 |
 | [`moa-inference.ipynb`](/software/moa-inference.ipynb) | Loads the saved artifacts and writes the Kaggle submission, no training; rebuilds the networks from `model_hyperparameters` in `metadata.json` | `submission.csv` |
-| [`moa-tuning.ipynb`](/software/moa-tuning.ipynb) | Tuning v1: superseded version. It uses 80 PCA components for g- and 300 CatBoost iterations, unlike the final pipeline (50 and 250); its output was not used by any reported run. | `best_hyperparameters.json` |
-| [`moa-tuning-row.ipynb`](/software/moa-tuning-row.ipynb) | Tuning v2: two stages on row-wise folds. Search on fold 0 (25/15/15 trials, 10% inner split for early stopping, default configuration enqueued as trial 0), confirmation of the top 3 candidates and of the default on fold 1; a tuned model is adopted only if it beats the default on both folds by at least 5e-5 | `best_hyperparameters.json`, `tuning_report.json`, `trials_*.csv` |
-| [`moa-tuning-hybrid.ipynb`](/software/moa-tuning-hybrid.ipynb) | Tuning v3: v2 with compound-aware folds (outer folds and inner split built like the training notebook's hybrid protocol, own split seed), wider search spaces, a longer pruner warm-up, and a confirmation on fold 1 with three paired seeds. A candidate is adopted only if the mean gain on the confirmation fold is at least 1e-4 **and** it wins on more than half of the seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_*.csv` |
-| [`moa-fold-diagnostics.ipynb`](/software/moa-fold-diagnostics.ipynb) | CPU-only diagnostics of a compound-aware run from its saved OOF files: fold sizes and losses, the largest compounds, targets dominated by a single compound, simulation of the `HYBRID_MIN_ROWS` threshold, and decomposition of the gap between protocols by compound frequency (with a bootstrap over compounds) | printed tables |
+| [`moa-tuning-hybrid.ipynb`](/software/moa-tuning-hybrid.ipynb) | Two-stage Optuna search on compound-aware folds (outer folds and inner split built like the training notebook's hybrid protocol, own split seed): search on fold 0 (25/15/15 trials, 10% inner split for early stopping, default configuration enqueued as trial 0), confirmation of the top 2 candidates and of the default on fold 1 with three paired seeds. A candidate is adopted only if the mean gain on the confirmation fold is at least 1e-4 **and** it wins on more than half of the seeds | `best_hyperparameters_hybrid.json`, `tuning_report.json`, `trials_*.csv` |
+| [`moa-fold-diagnostics.ipynb`](/software/moa-fold-diagnostics.ipynb) | CPU-only diagnostics of a compound-aware run from its saved OOF files: fold sizes and losses, the largest compounds, targets dominated by a single compound, simulation of the `HYBRID_MIN_ROWS` threshold, and decomposition of the gap between the protocols (R3, H2, G3) by compound frequency (with a bootstrap over compounds) | printed tables |
 | [`moa-blend-offline.ipynb`](/software/moa-blend-offline.ipynb) | Offline recombination of the OOF predictions of two runs with identical rows and folds (mixing models, averaging, six-model blend), scored with nested blending and paired per-fold differences | printed table |
 | [`moa-test-drug-overlap-nn.ipynb`](/software/moa-test-drug-overlap-nn.ipynb) | Indirect check of whether the test set shares compounds with the training set, from nearest-neighbour distances in feature space, with a power check (AUC and recovery of a known mixture) and a per-compound analysis of the frequent compounds | `nn_distance_ecdf.png`, `frequent_drugs_in_test.csv` |
 | [`moa-knn-override-freq-drugs.ipynb`](/software/moa-knn-override-freq-drugs.ipynb) | Offline test, on the hybrid OOF, of a nearest-neighbour override of the predictions for the rows of frequent compounds | printed tables |
 
 ### Runs referred to in the results
 
-| Run | CV protocol | Hyperparameters | Kaggle late submission |
-|---|---|---|---|
-| R | `row` (earlier revision of the code) | defaults | yes (private 0.01634, public 0.01865) |
-| H0 | `hybrid` | defaults | no |
-| H1 | `hybrid` | tuning v2 (row-wise folds) | no |
-| H2 | `hybrid` | tuning v3 (compound-aware folds) | yes (private 0.01643, public 0.01873) |
+| Run | CV protocol | Hyperparameters | Code revision | Kaggle late submission |
+|---|---|---|---|---|
+| R | `row` | defaults | earlier | yes (private 0.01634, public 0.01865) |
+| R3 | `row` | tuned | current | no |
+| H0 | `hybrid` | defaults | not recorded | no |
+| H2 | `hybrid` | tuned | current | yes (private 0.01643, public 0.01873) |
+| G0 | `grouped` | defaults | earlier | no |
+| G3 | `grouped` | tuned | current | no |
 
-The diagnostics notebook was applied to a further, earlier `hybrid` run: called H0; nested-blend OOF 0.01720. Its hyperparameters are the same as run R (defaults)
+"Tuned" means [`best_hyperparameters_hybrid.json`](/software/hyperparameters/best_hyperparameters_hybrid.json), the output of [`moa-tuning-hybrid.ipynb`](/software/moa-tuning-hybrid.ipynb); "defaults" means [`default_hyperparameters.json`](/software/hyperparameters/default_hyperparameters.json); "current" is the code of the delivered notebooks. The digit in R3, H2 and G3 is only an identifier. **R3, H2 and G3 share code and hyperparameters and differ only in the CV protocol, so they are comparable with one another; R, H0 and G0 are not comparable with them.**
+
+H0 is an earlier hybrid run (nested-blend OOF 0.01720) with default hyperparameters, used by the diagnostics and by the offline recombination. G0 is an earlier grouped run with default hyperparameters; its revision of the code differs from the current one only in the way the hyperparameters are passed (no hyperparameter file) and in the row weighting of the nested mean (comparison of the two notebooks). Its notebook is not part of the repository: its figures (nested blend 0.01957 after weighting the per-fold scores by the validation rows) come from its saved output and are used only in the comparison of tuned and default hyperparameters under the grouped CV.
 
 ## Approach summary
 
@@ -64,7 +68,7 @@ The diagnostics notebook was applied to a further, earlier `hybrid` run: called 
 |---|---|
 | Cross-validation | 5-fold multilabel-stratified (`iterative-stratification`), `random_state=42`, on treated rows only. Three protocols selected by `CV_SCHEME`: `"hybrid"` (default), `"grouped"`, `"row"` (see [Cross-validation protocols](#cross-validation-protocols)) |
 | Model selection (neural nets) | Inner split (10% of each training fold) for early stopping, LR scheduling and best-epoch choice, built with the same grouping rule as the outer folds; the outer fold is scored once |
-| Hyperparameter tuning | Optuna (TPE sampler, median pruner), three notebook versions (see [Hyperparameter tuning](#hyperparameter-tuning)); the values enter the training notebook through a JSON file validated in Step 1.5 |
+| Hyperparameter tuning | Optuna (TPE sampler, median pruner), one notebook (see [Hyperparameter tuning](#hyperparameter-tuning)); the values enter the training notebook through a JSON file validated in Step 1.5 |
 | Preprocessing (ResNet) | `QuantileTransformer` (RankGauss) → PCA (default: 50 components on gene features, 15 on cell-viability features), concatenated to the transformed features [11] |
 | Preprocessing (FT-Transformer, CatBoost) | `QuantileTransformer` (RankGauss), no PCA [11] |
 | Base models | TabularResNet, FT-Transformer (3-seed bagging each), CatBoost (`MultiLogloss`, fixed 250 iterations) |
@@ -99,34 +103,36 @@ The inner split used for early stopping follows the same rule. `HYBRID_MIN_ROWS`
 | hybrid, > 18 rows | 9.8% | 1.4% | 9.8% | 35.0 |
 | hybrid, > 30, 60 or 100 rows | 9.7% | 2.8% | 9.7% | 35.0 |
 
-The thresholds 30, 60 and 100 give identical splits (8 compounds). The threshold 18 is the largest one with the smallest fold-size deviation for this seed; the difference between 1.4% and 2.8% is within what a different seed could change, and the dependence of the CV loss on the threshold was not measured. Under `hybrid`, the targets without positives in the training folds are 3–4 (of 206) and 32–36 in the validation folds.
+The thresholds 30, 60 and 100 give identical splits (8 compounds). The threshold 18 is the largest one with the smallest fold-size deviation for this seed; the difference between 1.4% and 2.8% is within what a different seed could change, and the dependence of the CV loss on the threshold was not measured. Under `hybrid`, the targets without positives in the training folds are 3–4 (of 206) and 32–36 in the validation folds. Under `grouped` (run G3) the validation folds have 3,987 / 4,136 / 5,512 / 3,933 / 4,380 rows (the largest is 25.6% above the mean fold size), the training folds lack 3–4 targets and the validation folds 34–36.
 
 ### Hyperparameter tuning
 
-Three versions of the tuning notebook exist (see [Notebooks](#notebooks)). Their JSON outputs were used as follows:
+One notebook, [`moa-tuning-hybrid.ipynb`](/software/moa-tuning-hybrid.ipynb), produced the tuned hyperparameters used by runs H2, R3 and G3. It uses Optuna [12, 13] (TPE sampler with `seed=42`, median pruner) in two stages on folds 0 and 1 of a compound-aware split (`hybrid`, `HYBRID_MIN_ROWS` = 18, own split seed 1234):
 
-| Version | Folds | Model selection inside a trial | JSON used by |
+| Stage | Fold | What is done | Model selection inside a trial |
 |---|---|---|---|
-| v1 `moa-tuning` | 5 row-wise | the validation fold itself (best epoch on that fold) | no reported run |
-| v2 `moa-tuning-row` | 2 row-wise folds (0 and 1) | 10% row-wise inner split | run H1(file renamed `*_hybrid.json`) |
-| v3 `moa-tuning-hybrid` | 2 compound-aware folds (0 and 1, own seed) | 10% compound-aware inner split | run H2 |
+| 1, search | 0 | 25 / 15 / 15 trials (ResNet / CatBoost / FT-Transformer), one seed per trial; the default configuration is enqueued as trial 0 | 10% compound-aware inner split for early stopping; the outer fold is scored once |
+| 2, confirmation | 1 | the best 2 candidates and the default are re-evaluated with three paired seeds | same |
 
-The v2 file is named `best_hyperparameters_hybrid.json` in the earlier Kaggle Dataset only because it was renamed after the run; **it was tuned on row-wise folds**. To avoid confusion, the file of v2 should be archived as `best_hyperparameters_rowtuned.json` and `best_hyperparameters_hybrid.json` reserved for the output of v3.
+A candidate replaces the default only if its mean gain on the confirmation fold is at least 1e-4 **and** it wins on more than half of the seeds; the search-fold score is not used for the decision, because it is the minimum over the trials. A model for which no candidate passes keeps its default values. Within a trial the epoch is never selected on the scored fold; across trials, the candidates are picked on fold 0 and the adoption is decided on fold 1, and both folds overlap the validation folds of the reported CV (see [Limitations](#limitations)).
 
-The values used can be found in [Hyperparameters](/software/hyperparameters/), as three JSON files, each one showing the hyperparameter configurations for the three models. There is a table in the [README.md](/software/hyperparameters/README.md) that shows which tuning version or run corresponds to which file.
+The values enter the training notebook through a JSON file validated in Step 1.5. The defaults and the tuned values are in [Hyperparameters](/software/hyperparameters/); the [README](/software/hyperparameters/README.md) there tells which file each run used.
 
-Observations (they describe the searches, not a measured effect):
-- In v3 no FT-Transformer candidate beat the default on the confirmation fold, so the FT-Transformer of run H2 uses the default configuration.
-- CatBoost `learning_rate` and `subsample` are identical in H1 and H2, which is consistent with the same seeded random draw of the sampler (`TPESampler(seed=42)`). `l2_leaf_reg` sits at the same quantile (0.983 on a log scale) of both search ranges ([1, 20] in v2 and [1, 60] in v3): the search did not locate an interior optimum for it, and the CatBoost OOF does not change (0.01782 in H1, 0.01783 in H2).
-- In v3, the ResNet dropout (0.583, range [0.1, 0.6]), batch size (512, the largest value) and learning rate (2.67e-3, range [3e-4, 3e-3]) lie at or near the upper bounds of the search space, so the optimum may lie outside it.
+**Earlier exploratory tuning.** A first tuning cycle on row-wise folds was run before the final notebook. Its notebook is not preserved in this repository and none of its results is reported, but it informed the width of the search space (the search spaces of the final notebook were widened where its optima had settled), so it counts among the sources of optimism of the tuned runs.
+
+Observations (they describe the search, not a measured effect):
+- No FT-Transformer candidate beat the default on the confirmation fold, so the FT-Transformer of the tuned runs uses the default configuration.
+- The ResNet dropout (0.583, range [0.1, 0.6]), batch size (512, the largest value) and learning rate (2.67e-3, range [3e-4, 3e-3]) lie at or near the upper bounds of the search space, and the CatBoost `l2_leaf_reg` (56.0, range [1, 60]) is near the upper end of its range: the optimum may lie outside the search space.
 
 ## Results
 
 ### Summary of the findings
 
-- Under the compound-aware `hybrid` CV the nested blend scores 0.01715 (run H2) and 0.01714 (run H1) against 0.01607 under the `row` CV (run R): +6.7%. The comparison is not controlled (different hyperparameters and code revision), see below.
-- Tuning does not change the hybrid result measurably: the blend of H2 differs from that of H1 by +1e-5, and no recombination of the OOF predictions of two hybrid runs improves on H2 by the 5e-5 threshold.
-- The two late submissions score within 1e-4 of each other on the private (0.01634 vs 0.01643) and on the public set (0.01865 vs 0.01873). The hybrid CV estimate is closer to the test score (private +5.3% against +11.8% for the row-wise estimate), not because the models are better.
+- **Protocol, controlled comparison.** With the same code and the same tuned hyperparameters the nested blend scores 0.01595 ± 0.00016 under `row` (run R3), 0.01715 under `hybrid` (run H2) and 0.01926 under `grouped` (run G3): the hybrid CV is 7.5% above the row-wise one, and the pure grouped CV is 12.3% above the hybrid one (20.8% above the row-wise one). The earlier row-wise run R (default hyperparameters, earlier code revision) scored 0.01607; its comparison with H2 (+6.7%) and with G3 (+19.9%) is not controlled.
+- **Where the difference sits.** Section 7 of the diagnostics notebook splits the paired per-row difference of the blend by compound frequency. From R3 to H2 (+0.00119 on the mean row loss) practically all of it, +0.00116, sits on the rows of ordinary compounds (+0.00129 per row on those rows, +7.4% of the loss R3 has on them, 95% interval over compounds [+0.00116, +0.00143]); the nine frequent compounds contribute +0.00003. From H2 to G3 the ordinary compounds hardly change (loss 0.01879 against 0.01884) and almost all of the further +0.00206, about +0.00201, comes from the frequent compounds, whose loss goes from 0.00198 to 0.02260. The earlier, uncontrolled analysis (H0 against R) had put the row-wise to hybrid difference on the ordinary compounds as well.
+- **Tuning.** Under the hybrid CV tuning does not change the result measurably: H2 (0.01715) differs from the earlier default-hyperparameter run H0 (0.01720) by −5e-5, and no recombination of the OOF predictions of H0 and H2 improves on H2 by the 5e-5 threshold. Under the grouped CV the tuned run G3 is better than the earlier default run G0 (0.01926 against 0.01957, −3.1e-4, in 4 of 5 folds), but one fold carries 63% of the gain, G0 comes from an earlier code revision and there is one run per configuration: a small positive effect is likely, not proven. Under the row-wise CV the tuned run R3 is 1.2e-4 below the default run R (0.01595 against 0.01607), mostly through the ResNet, but R also comes from an earlier code revision.
+- **Ensemble.** Under the hybrid CV (H2) each of the three models improves the blend in all five folds. Under the row-wise CV CatBoost does in R, whereas in R3 ResNet and FT-Transformer do and CatBoost adds only 2e-5 (it improves four folds and leaves the fifth unchanged at five decimals). Under the grouped CV (G3) the FT-Transformer adds nothing measurable (+1e-5 when removed, blend weight 0.15), while ResNet and CatBoost add about 2e-4 each, and no model helps in all five folds.
+- **Kaggle.** The two late submissions score within 1e-4 of each other on the private (0.01634 vs 0.01643) and on the public set (0.01865 vs 0.01873). Both private scores (about 0.0180 on the treated-rows scale) lie between the hybrid (0.01715) and the grouped (0.01926) CV estimates: the hybrid estimate is 4.5–5.0% below them and the grouped one 6.7–7.3% above. The grouped CV reproduces 169% of the gap between the row-wise estimate and the private score (it overshoots), the hybrid one 57% (165% and 60% with R3 as the row-wise reference). Which protocol is closer to the test set depends on how many test compounds are in the training set, which cannot be verified.
 - The test set contains frequent compounds of the training set: five of the eight analysed appear in the test set (assigned rows well above those expected if absent); four of them (`87d714366`, `8b87a7a83`, `d1b47f29d`, `d08af5d4b`) at about their training frequency, `292ab2c28` at about half of it. For ordinary compounds the overlap cannot be assessed with the proxy used (AUC 0.516).
 - A nearest-neighbour override on the frequent compounds worsens the OOF loss and was not adopted.
 
@@ -134,19 +140,21 @@ Observations (they describe the searches, not a measured effect):
 
 Out-of-fold (OOF) mean log loss over the 5 folds, treated rows only (lower is better). Network scores use predictions averaged over 3 seeds.
 
-| Model | R (`row`, defaults) | H1 (`hybrid`, tuning v2) | H2 (`hybrid`, tuning v3) |
-|---|---|---|---|
-| Baseline (per-target prior of the training fold) | 0.0222 | 0.02233 | 0.02233 |
-| TabularResNet | **0.01632** | 0.01744 | 0.01735 |
-| FT-Transformer | 0.01643 | 0.01736 | 0.01744 |
-| CatBoost | 0.01699 | 0.01782 | 0.01783 |
-| **Ensemble (nested, honest estimate)** | **0.01607 ± 0.00017** | **0.01714 ± 0.00031** | **0.01715 ± 0.00031** |
-| Blend weights (ResNet / FT-Transformer / CatBoost) | 0.4529 / 0.3746 / 0.1725 | 0.3705 / 0.405 / 0.2246 | 0.478 / 0.3475 / 0.1745 |
-| Total run time on 2× T4 | ≈130 min | 75.1 min | 95.0 min |
+| Model | R (`row`, defaults) | R3 (`row`, tuned) | H2 (`hybrid`, tuned) | G3 (`grouped`, tuned) |
+|---|---|---|---|---|
+| Baseline (per-target prior of the training fold) | 0.0222 | 0.02220 | 0.02233 | 0.02370 |
+| TabularResNet | 0.01632 | 0.01606 | 0.01735 | 0.01971 |
+| FT-Transformer | 0.01643 | 0.01642 | 0.01744 | 0.01992 |
+| CatBoost | 0.01699 | 0.01701 | 0.01783 | 0.01979 |
+| **Ensemble (nested, honest estimate)** | **0.01607 ± 0.00017** | **0.01595 ± 0.00016** | **0.01715 ± 0.00031** | **0.01926 ± 0.00099** |
+| Blend weights (ResNet / FT-Transformer / CatBoost) | 0.4529 / 0.3746 / 0.1725 | 0.6792 / 0.2639 / 0.0569 | 0.478 / 0.3475 / 0.1745 | 0.4893 / 0.151 / 0.3596 |
+| Total run time on 2× T4 | ≈130 min | 116.5 min | 95.0 min | 89.9 min |
 
-Two blend scores are computed. The *nested* score fits the weights on 4 folds and scores them on the fifth, for each fold in turn. The *in-sample* score fits the weights on all OOF rows and scores them on the same rows. The difference measures the optimism of the blending step: 1.58e-6 for R (0.01606 vs 0.01607), 2.84e-6 for H1 and 2.57e-6 for H2. With only three weights to fit it is negligible. This says nothing about leakage from the CV design itself (see [Limitations](#limitations)). The nested score is 27.6% (R) and 23.2% (H2) lower than the baseline.
+The ± is the standard deviation of the five fold scores. Where the folds are unequal (G3) the nested mean is weighted by the number of validation rows of each fold.
 
-The standard deviation across folds is larger under the hybrid protocol (0.00031 against 0.00017): the folds are less homogeneous when compounds are kept together.
+Two blend scores are computed. The *nested* score fits the weights on 4 folds and scores them on the fifth, for each fold in turn. The *in-sample* score fits the weights on all OOF rows and scores them on the same rows. The difference measures the optimism of the blending step: 1.58e-6 for R (0.01606 vs 0.01607), 2.57e-6 for H2, 4.5e-5 for G3 (0.01921 vs 0.01926) and 1.14e-6 for R3 (0.01595 for both). With three weights it is negligible for R, R3 and H2; under the grouped CV it is larger (the cause was not investigated; the fold scores are heterogeneous, 0.0181–0.0210) but still more than an order of magnitude below the 2.1e-3 difference between the hybrid and the grouped protocol. This says nothing about leakage from the CV design itself (see [Limitations](#limitations)). The nested score is 27.6% (R), 28.1% (R3), 23.2% (H2) and 18.7% (G3) lower than the baseline.
+
+The standard deviation across folds is larger under the compound-aware protocols (0.00031 for H2, 0.00099 for G3) than under the row-wise one (0.00017 for R, 0.00016 for R3): the folds are less homogeneous when compounds are kept together. Under `grouped` the folds are also unequal (3,933 to 5,512 validation rows); fold 2, the largest (+25.6% over the mean), is the hardest, with a nested score of 0.02095 against 0.0181–0.0194 for the other four.
 
 #### Run R (row-wise, default hyperparameters)
 
@@ -172,9 +180,21 @@ The gain from CatBoost is small, but it is consistent: removing it worsens the n
 
 Per-fold scores in the notebook output are the mean of the per-seed losses; they are higher than the OOF scores, which use seed-averaged predictions (bagging gain of about 0.0005 per network in run R).
 
-A full training run of R (5 folds × 2 networks × 3 seeds, plus the CatBoost CV) took about 130 minutes on a Kaggle notebook with 2× NVIDIA T4: 128 min for the main pipeline as printed by the notebook (96.6 min neural-network CV, 28.7 min CatBoost CV, 0.5 min test-set inference, the rest being blending and logging) and 131 min for the whole notebook including the final checks. Wall-clock time is noisy on the platform: the ablation configurations below, which train more jobs, finished in 106–113 minutes. The hybrid runs took less (H1: 55.7 min neural-network CV, 16.7 min CatBoost CV; H2: 75.2 and 16.8 min); the differences between runs are not explained here.
+A full training run of R (5 folds × 2 networks × 3 seeds, plus the CatBoost CV) took about 130 minutes on a Kaggle notebook with 2× NVIDIA T4: 128 min for the main pipeline as printed by the notebook (96.6 min neural-network CV, 28.7 min CatBoost CV, 0.5 min test-set inference, the rest being blending and logging) and 131 min for the whole notebook including the final checks. Wall-clock time is noisy on the platform: the ablation configurations below, which train more jobs, finished in 106–113 minutes. The compound-aware runs took less (H2: 75.2 min neural-network CV and 16.8 min CatBoost CV; G3: 70.2 and 16.8 min); the differences between runs are not explained here.
 
-#### Run H2 (hybrid, tuning v3)
+#### Run R3 (row-wise, tuned hyperparameters)
+
+The ensemble is 0.7% better than the best single model (ResNet, 0.01606), with weights 0.679 / 0.264 / 0.057 (ResNet / FT-Transformer / CatBoost): the ResNet carries about two thirds of the weight. Residual correlations (Step 15.3) are 0.985 / 0.974 / 0.973 between the model pairs on all cells (ResNet–FT, ResNet–CatBoost, FT–CatBoost) and 0.972 / 0.930 / 0.935 on the positive cells. The drop-one nested blends are:
+
+| Model excluded | OOF log loss | Difference vs. full blend (0.01595) | Folds that get worse without it |
+|---|---|---|---|
+| ResNet | 0.01627 ± 0.00015 | +0.00032 | 5 of 5 |
+| FT-Transformer | 0.01602 ± 0.00015 | +0.00007 | 5 of 5 |
+| CatBoost | 0.01597 ± 0.00016 | +0.00002 | 4 of 5 (fold 3 unchanged at five decimals) |
+
+Under the row-wise CV with the tuned hyperparameters the ResNet dominates the blend and CatBoost adds only 2e-5 (5e-5 in run R, with default hyperparameters). The per-fold comparisons are read from the scores printed in Steps 14.5 and 15.3 at five decimals, so differences of 1e-5 are at the limit of their precision.
+
+#### Run H2 (hybrid, tuned hyperparameters)
 
 The ensemble is 1.2% better than the best single model (ResNet, 0.01735). Residual correlations (Step 15.3) are 0.988 / 0.978 / 0.978 between the model pairs on all cells (ResNet–FT, ResNet–CatBoost, FT–CatBoost) and 0.978 / 0.945 / 0.946 on the positive cells. The drop-one nested blends are:
 
@@ -186,29 +206,56 @@ The ensemble is 1.2% better than the best single model (ResNet, 0.01735). Residu
 
 Removing any one model worsens the nested score in all five folds (paired per-fold differences, from the scores printed in Step 14.5 and Step 15.3). The three models are strongly correlated and each adds 6–12 × 10⁻⁵ at most.
 
+#### Run G3 (grouped, tuned hyperparameters)
+
+The ensemble is 2.3% better than the best single model (ResNet, 0.01971), with weights 0.489 / 0.151 / 0.360 (ResNet / FT-Transformer / CatBoost). Residual correlations (Step 15.3) are 0.985 / 0.977 / 0.984 between the model pairs on all cells and 0.891 / 0.806 / 0.832 on the positive cells, lower than under H2 (0.978 / 0.945 / 0.946): on compounds not seen in training the errors of the models are less correlated. The drop-one nested blends are:
+
+| Model excluded | OOF log loss | Difference vs. full blend (0.01926) | Folds that get worse without it |
+|---|---|---|---|
+| ResNet | 0.01948 ± 0.00105 | +0.00022 | 4 of 5 (fold 3 improves by 1e-5) |
+| FT-Transformer | 0.01927 ± 0.00095 | +0.00001 | 4 of 5 (fold 2 improves by 7e-5) |
+| CatBoost | 0.01947 ± 0.00122 | +0.00021 | 4 of 5 (fold 1 improves by 4e-5) |
+
+Under the grouped CV the FT-Transformer adds nothing measurable to the blend, while ResNet and CatBoost add about 2e-4 each, and no model improves the score in all five folds; the statement that every model helps in all five folds holds for H2 only (for R it was checked for CatBoost). The FT-Transformer of G3 has the default configuration (see [Hyperparameter tuning](#hyperparameter-tuning)); why its contribution shrinks was not investigated.
+
 ### Row-wise against compound-aware CV
 
-The blend loss under the hybrid CV is higher than under the row-wise CV (0.01715 against 0.01607 on treated rows, +6.7%), consistent with the hybrid CV being less optimistic. This comparison is **not controlled**: run R used default hyperparameters and an earlier revision of the code, runs H1 and H2 used tuned hyperparameters, and the fold assignments differ. A controlled comparison (same code and hyperparameters under both protocols) was not run.
+Runs R3 (`row`), H2 (`hybrid`) and G3 (`grouped`) use the same code, the same tuned hyperparameters, the same seeds and the same preprocessing; only the construction of the outer folds and of the inner split changes:
 
-The diagnostics notebook, applied to the earlier hybrid run H0 and to the row-wise reference OOF, decomposes the paired per-row difference (+0.00114 on the blend) by compound frequency:
+| | R3 (`row`) | H2 (`hybrid`) | G3 (`grouped`) |
+|---|---|---|---|
+| Validation rows per fold | 4,390 / 4,390 / 4,389 / 4,390 / 4,389 | 4,386 / 4,356 / 4,371 / 4,383 / 4,452 | 3,987 / 4,136 / 5,512 / 3,933 / 4,380 |
+| Validation rows whose compound is in the training fold | 99.4% (99.2–99.6% per fold) | 9.8% | 0% |
+| Targets without positives in the validation fold, per fold | 2 / 1 / 2 / 1 / 2 | 36 / 36 / 36 / 35 / 32 | 35 / 36 / 35 / 36 / 34 |
+| Nested blend, treated rows | 0.01595 ± 0.00016 | 0.01715 ± 0.00031 | 0.01926 ± 0.00099 |
+| Change against H2 | −7.0% | – | +12.3% |
 
-| Rows | Contribution to the difference | Loss, row-wise → hybrid |
-|---|---|---|
-| Frequent compounds (9.8% of the rows) | +0.00003 | 0.00172 → 0.00198 |
-| All other rows | +0.00111 | 0.01762 → 0.01885 (+0.00123 per row, +7.0%; 95% interval over compounds [+0.00112, +0.00135]) |
+These differences can be attributed to the protocol, with three caveats: there is one run per protocol, and the run-to-run noise of the compound-aware runs was not measured (the fold standard deviation is 0.0003 to 0.001); the tuned hyperparameters were selected on `hybrid` folds, which may favour that protocol; and the estimates are optimistic by an unknown amount for the reasons given in [Limitations](#limitations). The earlier run R (default hyperparameters, earlier code revision, 0.01607) is not part of the controlled comparison: R to H2 (+6.7%) and R to G3 (+19.9%) mix the effect of the protocol with that of the hyperparameters and of the code revision.
 
-Almost all of the difference is therefore on the rows of ordinary compounds, which the hybrid protocol evaluates as unseen. Under the hybrid CV the rows whose compound is in the training fold are the frequent compounds, with a loss of about 0.002 against about 0.0188 for the others (blend, run H2: 0.00198 and 0.01879; run H1: 0.00194 and 0.01878). These "seen" rows are not comparable to the 99.4% "seen" rows of the row-wise CV (blend loss 0.01604 seen, 0.01922 for the 0.6% unseen).
+The diagnostics notebook (section 7; `RUN_DIR` = H2, `ROW_RUN_DIR` = R3, G3 as extra run, `FREQUENT_MIN_ROWS` = 18) decomposes the paired per-row difference between the protocols by compound frequency (frequent compounds: the 9 compounds with more than 18 rows, 9.8% of the treated rows), with a bootstrap over compounds:
 
-Other results of the diagnostics (run H0 unless stated):
-- The worst fold (fold 4, +4.7% against the mean of the others) is not explained by the frequent compounds: the spread of the fold loss is 0.00091 on all rows and 0.00095 excluding them.
+| Rows | Share | Loss R3 (`row`) | Loss H2 (`hybrid`) | Loss G3 (`grouped`) |
+|---|---|---|---|---|
+| Frequent compounds | 9.8% | 0.00165 | 0.00198 | 0.02260 |
+| All other rows | 90.2% | 0.01750 | 0.01879 | 0.01884 |
+
+Relative to R3, paired by row, the blend loss of H2 is higher by +0.00119 on the mean row loss, of which +0.00003 on the frequent compounds and +0.00116 on all other rows (+0.00129 per row on those rows, +7.4% of the loss R3 has on them, 95% interval over compounds [+0.00116, +0.00143]); that of G3 is higher by +0.00326, of which +0.00204 on the frequent compounds and +0.00121 on all other rows (+0.00134 per row, +7.7%, [+0.00120, +0.00148]). Practically all of the difference between the row-wise and the hybrid CV therefore sits on the ordinary compounds, and the ordinary compounds cost the same under the hybrid and the grouped protocols (loss 0.01879 and 0.01884). What the grouped protocol adds is the loss of the frequent compounds when they are not in the training fold (0.02260, against 0.00198 under hybrid and 0.00165 under row): it accounts for about 0.00201 of the 0.00206 between G3 and H2 (computed from the components above, without an interval). The earlier, uncontrolled analysis (run H0 against run R) had given the same picture for the row-wise to hybrid difference (+0.00003 on the frequent compounds, +0.00111 on all other rows).
+
+Under the hybrid CV the rows whose compound is in the training fold are the frequent compounds, with a loss of about 0.002 against about 0.0188 for the others (blend, run H2: 0.00198 and 0.01879). These "seen" rows are not comparable to the 99.4% "seen" rows of the row-wise CV (run R, blend: loss 0.01604 for the seen rows, 0.01922 for the 0.6% unseen).
+
+Other results of the diagnostics:
+- Worst fold of H2 (blend, `RUN_DIR`, Step 3.2): fold 4, loss 0.01773, +4.3% against the mean of the other four; it is also the largest fold (4,452 rows, +1.4% over the mean). The spread of the fold loss (maximum minus minimum) is 0.00086 on all rows and 0.00090 excluding the frequent compounds, so the outlier is not explained by them (earlier run H0: fold 4, +4.7%, spread 0.00091 and 0.00095).
 - The labels are identical across all rows of each of the 8 largest compounds, and 10 of the 87 targets with at least 50 positives take at least 50% of their positives from one compound (for example `proteasome_inhibitor`: 98.9% from `87d714366`, `hmgcr_inhibitor`: 86.9%, `nfkb_inhibitor`: 86.3%).
-- Per-target error analysis (run H2 blend, Step 15.4): the 41 targets with 100 or more positives carry 47.9% of the loss (skill 0.342 against the per-target prior), the 53 targets with fewer than 20 positives 6.6% (skill +0.080, 95% interval [+0.056, +0.102]). The blend over-predicts the rare targets (expected over observed positives 1.47 below 20 positives, 7.7 below 5). Skill by number of positives, `row` against `hybrid`: 5–9 positives 0.064 → 0.123, 10–19 0.145 → 0.068, 20–49 0.121 → 0.061, 50–99 0.180 → 0.120, 100+ 0.374 → 0.342. The per-target baseline moves between protocols, so these skills are not strictly comparable. The Spearman correlation between positives per compound and the change in skill (+0.053, p = 0.47, 184 targets) is uninformative because the variable is almost constant (the median compound has 6 rows).
+- Per-target error analysis (blend, Step 15.4). Run H2: the 41 targets with 100 or more positives carry 47.9% of the loss (skill 0.342 against the per-target prior), the 53 targets with fewer than 20 positives 6.6% (skill +0.080, 95% interval [+0.056, +0.102]); the blend over-predicts the rare targets (expected over observed positives 1.47 below 20 positives, 7.7 below 5). Run G3: the rare targets carry 6.1% of the loss, with skill +0.044 (95% interval [−0.013, +0.085], which includes 0) and expected over observed positives 1.66; the other targets have skill +0.197. Skill by number of positives, `row` (run R) → `hybrid` (H2) → `grouped` (G3): 5–9 positives 0.064 → 0.123 → 0.112, 10–19 0.145 → 0.068 → 0.022, 20–49 0.121 → 0.061 → 0.040, 50–99 0.180 → 0.120 → 0.100, 100+ 0.374 → 0.342 → 0.274. The per-target baseline moves between protocols, so these skills are not strictly comparable. The targets that lose most skill from `row` to `grouped` are those carried by few compounds (`nitric_oxide_production_inhibitor`: 12 positives from 2 compounds, skill 0.147 → −0.474; `hmgcr_inhibitor`: 283 positives from 7 compounds, 0.834 → 0.217). The Spearman correlation between positives per compound and the change in skill (+0.053, p = 0.47 for hybrid; −0.085, p = 0.25 for grouped; 184 targets) is uninformative because the variable is almost constant (the median compound has 6 rows).
 
-### Does tuning help under the compound-aware CV?
+### Does tuning help?
 
-- **Run H2 against run H1. ** The blend changes by +1e-5 (0.01715 against 0.01714). Per model, the OOF changes by −9e-5 (ResNet), +8e-5 (FT-Transformer, which is the default configuration in H2) and +1e-5 (CatBoost). The ResNet of H2 has a lower fold loss than that of H1 on all five folds when the three seeds are scored separately (mean difference −2.6e-4, from −1.7e-4 to −3.4e-4); after seed averaging the OOF gain shrinks to −9e-5, so most of the gain is variance that bagging already removes.
+The effect of tuning was not measured in a controlled way under any protocol, because the default-hyperparameter runs come from earlier code revisions or earlier runs (R, H0, G0). What the available runs show:
+
+- **Hybrid CV (H0 to H2).** Nested blend 0.01720 (defaults, earlier run H0) against 0.01715 (tuned, H2): −5e-5, well below the fold standard deviation (0.0003).
 - **Offline recombination** (`moa-blend-offline`, run H2 against the earlier hybrid run H0): no variant (ResNet of H2 with FT-Transformer of H0, with or without the CatBoost of H0; averages of the two runs; six models with free weights) reaches the adoption threshold (gain of at least 5e-5 and improvement on at least 4 of 5 folds). The best variant, the six-model blend, scores 0.01714 against 0.01715 for H2 (H0 alone: 0.01720).
-- The effect of tuning against the defaults, under the hybrid CV, was not measured in a controlled way.
+- **Grouped CV (G0 to G3).** Nested scores per fold, G0 → G3: 0.01891 → 0.01878, 0.01877 → 0.01856, 0.02180 → 0.02095, 0.01929 → 0.01938, 0.01835 → 0.01811. Weighted by the validation rows the blend goes from 0.01957 to 0.01926 (−3.1e-4, −1.6%): the tuned run is better in 4 of 5 folds, but fold 2 (the largest and hardest) carries 63% of the sum of the fold gains and the mean gain without it is 1.3e-4. The two notebooks differ only in the hyperparameter plumbing and in the weighting of the nested mean. With one run per configuration, a small positive effect is likely but not proven.
+- **Row-wise CV (R to R3).** Nested blend 0.01607 (defaults, run R) against 0.01595 (tuned, R3): −1.2e-4 (−0.7%), below the fold standard deviation (0.00016–0.00017). The gain comes from the ResNet (OOF 0.01632 → 0.01606, −2.6e-4); CatBoost with its tuned values is not better under `row` (0.01699 → 0.01701), and the FT-Transformer, which has the default configuration in both runs, scores 0.01643 and 0.01642, which suggests that the difference in code revision between R and R3 matters little for that model. R comes from an earlier code revision and there is one run per configuration, so the effect of tuning under `row` is small and probably positive, not proven.
 
 ### Do the test compounds overlap with the training compounds?
 
@@ -258,10 +305,20 @@ Two models were submitted as late submissions through the inference notebook: th
 
 The cross-validation scores are computed on treated rows only, whereas the Kaggle score averages over all test rows. Control rows are predicted as 0 with true value 0 and add almost no loss, so the all-rows score is approximately the treated-only score multiplied by the share of treated rows. That share is 0.910 in the public test set, which gives, for example, 0.01607 × 0.910 = 0.01462. The share in the hidden part of the test set may differ slightly, so the rescaling is approximate. The private score, computed on more rows, is the more reliable of the two. The consistency of the inference notebook was checked on the public test set: its predictions differ from those of the training notebook by at most 1.1e-16 (run R).
 
+The same private scores can be compared with the CV estimates of the protocols (the models of runs R3 and G3 were never submitted: the private scores are those of the submissions R and H2):
+
+| CV estimate (treated rows) | Rescaled (× 0.910) | Private score of R (0.01634) above the estimate | Private score of H2 (0.01643) above the estimate |
+|---|---|---|---|
+| R (`row`, defaults) 0.01607 | 0.01462 | +11.8% | +12.4% |
+| R3 (`row`, tuned) 0.01595 | 0.01452 | +12.5% | +13.2% |
+| H2 (`hybrid`, tuned) 0.01715 | 0.01561 | +4.7% | +5.3% |
+| G3 (`grouped`, tuned) 0.01926 | 0.01753 | −6.8% | −6.3% |
+
 How to read these numbers:
+- Both private scores lie between the hybrid and the grouped estimates: the hybrid CV is slightly optimistic and the grouped CV is pessimistic. The grouped CV reproduces 169% of the gap between the row-wise estimate (0.01607) and the private score, the hybrid CV 57% (training notebooks, Step 15.5); with R3 (0.01595), which is controlled for hyperparameters and code, as the row-wise reference the figures are 165% and 60%. The two protocols bracket the test score, and which one is closer depends on how many ordinary test compounds are in the training set, which could not be assessed (see below): the grouped CV is a pessimistic bound, not a faithful estimate.
 - The hybrid CV reproduces about 57% of the gap between the row-wise CV estimate and the private score (training notebook, Step 15.5). The hybrid estimate of the models of H2 (0.01561) is still 5.3% below the private score.
 - The two submissions differ by +9e-5 (private) and +8e-5 (public) in favour of the row-wise models. With one submission per configuration and a fold standard deviation of 3e-4, this difference cannot be interpreted as one model being worse: the conclusion that holds is that changing the protocol, the tuning and the model selection did not move the test score measurably.
-- *Back-of-the-envelope inference, not a measurement.* If about 6.6% to 9.8% of the test rows belong to frequent compounds (the five compounds found above, up to all nine at their training frequency) and the losses of the hybrid CV (about 0.002 on those rows, 0.0188 on the others) held on the test set, the all-rows estimate would be 0.0156–0.0161, so the residual gap with the private score (0.01643) would be 2–5%. The public score (0.01873) stays about 20% above the CV estimate, and the public and private scores differ by 0.0023 for both submissions: the test subsets differ in difficulty, and this cannot be explained by compound overlap.
+- *Back-of-the-envelope inference, not a measurement.* If about 6.6% to 9.8% of the test rows belong to frequent compounds (the five compounds found above, up to all nine at their training frequency) and the losses of the hybrid CV (about 0.002 on those rows, 0.0188 on the others) held on the test set, the all-rows estimate would be 0.0156–0.0161, so the residual gap with the private score (0.01643) would be 2–5%. Section 7 of the diagnostics notebook inverts the calculation with the losses of H2 (0.00198 on the frequent compounds, 0.01879 on the others): reproducing the private score of the row-wise submission (0.01634, which is 0.01796 on the treated-rows scale) takes 4.9% of the test rows from seen frequent compounds (+10.3% and −0.4% if the score is 5% lower or higher), which is compatible with the 6.6% found above; for the public score (0.02049 on the treated-rows scale) the result is −10.2% (−4.1% and −16.3%), that is, no share of seen frequent compounds can reproduce it. The public score (0.01873) stays about 20% above the CV estimate, and the public and private scores differ by 0.0023 for both submissions: the test subsets differ in difficulty, and this cannot be explained by compound overlap.
 
 ### Ablation: is an extra network worth it?
 
@@ -283,18 +340,19 @@ The "differences below the fold standard deviation" argument is unpaired. The pe
 
 ### Protocol note
 
-An earlier version of the code selected the best epoch on the same fold that produced the OOF predictions, giving an ensemble score of 0.01595. The final code uses an inner validation split instead, and the score moved to about 0.0161. The difference of about 0.0001 is consistent with selection optimism, but it also includes the effect of training on 10% less data per fold and the run-to-run noise (about 1e-5), so it is not an exact measurement of the optimism. The first tuning notebook (v1) has the same flaw by construction: the best epoch of each trial is selected on the validation fold that is scored, so its fold-mean losses (ResNet 0.01602, FT-Transformer 0.01698, CatBoost 0.01767) are not comparable with the OOF scores. Versions v2 and v3 use an inner split.
+An earlier version of the code selected the best epoch on the same fold that produced the OOF predictions, giving an ensemble score of 0.01595. The final code uses an inner validation split instead, and the score moved to about 0.0161. The difference of about 0.0001 is consistent with selection optimism, but it also includes the effect of training on 10% less data per fold and the run-to-run noise (about 1e-5), so it is not an exact measurement of the optimism. A first, exploratory tuning notebook (not preserved in this repository) had the same flaw by construction: the best epoch of each trial was selected on the validation fold that was scored, so its losses were not comparable with the OOF scores, and none of its results is reported. The tuning notebook of this repository uses an inner split.
 
 ### Leaderboard
 
-The row-wise submission (private score 0.01634) would rank approximately 1400th of 4,373 in the private leaderboard and 1800th in the public one. Late submissions do not appear on the leaderboards, so this is an approximation obtained by comparing the scores with the final rankings of the competition. The hybrid submission scores 9e-5 higher on the private set; its rank was not computed.
+The row-wise submission (private score 0.01634) would rank approximately 1400th of 4,373 in the private leaderboard and 1800th in the public one, while the hybrid submission would rank respectively 1620th and 2000th in private and public leaderboards. Late submissions do not appear on the leaderboards, so this is an approximation obtained by comparing the scores with the final rankings of the competition (source and date of access: [Leaderboard](https://www.kaggle.com/competitions/lish-moa/leaderboard) - 11/11/2026).
 
 ## Limitations
 
 - **Compound grouping in the CV is a design choice, and the test overlap is partly unknown.** The training compounds are known (`train_drug.csv`) but the test set has no identifier. `HYBRID_MIN_ROWS` was chosen on the fold-size balance of a single splitter seed; the thresholds 30, 60 and 100 produce identical splits, and the dependence of the CV loss on the threshold was not measured. The nearest-neighbour analysis shows that frequent compounds are in the test set but cannot say anything about ordinary compounds (AUC 0.516); neither the hybrid nor the pure grouped CV can be declared the faithful one, and their difference brackets the uncertainty.
-- **The row-wise and hybrid results are not directly comparable.** Run R used default hyperparameters and an earlier revision of the code; H1 and H2 used tuned hyperparameters. The +6.7% difference mixes the effect of the protocol with these changes.
+- **Only R3, H2 and G3 are comparable with one another.** They share code and hyperparameters; run R (like H0 and G0) used default hyperparameters and an earlier code revision, so any comparison with it (for example R to H2, +6.7%) mixes protocol, hyperparameters and code. The comparison among R3, H2 and G3 rests on one run per protocol, and the tuned hyperparameters were selected on `hybrid` folds, which may favour that protocol.
+- **The grouped CV is unbalanced.** In G3 the validation folds have 3,933 to 5,512 rows (the largest 25.6% above the mean), 34–36 of the 206 targets have no positive in the validation fold and the nested score is noisier (standard deviation 0.00099). Its estimate is above the Kaggle private score (by 6.7–7.3%), so it is a pessimistic bound rather than a faithful estimate.
 - **Selection bias from tuning and from model choice.** Hyperparameters, architectures and the final 3-model choice were selected by looking at OOF scores on folds that overlap with the reported ones: the tuning folds (folds 0 and 1 of the tuning seeds) contain rows that are also in the validation folds of the reported OOF, and the recombinations of the OOF of two runs were all scored on the same OOF. No hold-out was reserved before tuning, and nested cross-validation of the whole procedure was too costly (estimated at tens of hours on the available GPUs). The CV scores are therefore optimistic by an unknown amount, and the differences between the configurations that were compared are below the fold standard deviation.
-- **Truncated and noisy tuning.** The search stages use one seed per trial and 25/15/15 trials (ResNet/CatBoost/FT-Transformer), of which 10/4/4 are random start-up trials of the TPE sampler. In v3 several tuned values lie at or near the bounds of the search space (ResNet dropout, batch size and learning rate; CatBoost `l2_leaf_reg`), so the optimum may be outside it. Tuning v2 used row-wise folds, which does not match the hybrid evaluation protocol. The adoption rules protect against adopting noise (confirmation on a second fold; in v3, three paired seeds) but do not prove that the adopted values are better than the defaults in the hybrid CV.
+- **Truncated and noisy tuning.** The search stages use one seed per trial and 25/15/15 trials (ResNet/CatBoost/FT-Transformer), of which 10/4/4 are random start-up trials of the TPE sampler. Several tuned values lie at or near the bounds of the search space (ResNet dropout, batch size and learning rate; CatBoost `l2_leaf_reg`), so the optimum may be outside it. A first exploratory tuning cycle on row-wise folds was run before the final notebook: it is not preserved, none of its results is reported, but it informed the search space and counts among the sources of optimism of the tuned runs. The adoption rules protect against adopting noise (confirmation on a second fold with three paired seeds) but do not prove that the adopted values are better than the defaults: the only comparisons of tuned and default runs (H0 to H2, G0 to G3) involve earlier runs.
 - **Preprocessing fitted on the whole training fold.** The RankGauss and PCA transforms are fitted on the entire training fold, including the 10% inner validation rows. The transforms are unsupervised, so no labels leak and the outer fold is never seen; the only possible effect is a slightly optimistic early-stopping choice.
 - **CV on treated rows only.** CV scores are comparable with leaderboard scores only after rescaling by the treated share (see above).
 - **Two submissions, noisy test subsets.** Each Kaggle score comes from a single submission. Public and private scores differ by 0.0023 for both submissions, more than seven times the fold standard deviation of the hybrid CV (0.00031), so the fold standard deviation understates the uncertainty on unseen data. Late submissions do not appear on the leaderboard. The two submissions cannot be ranked against each other (difference 9e-5).
@@ -311,17 +369,13 @@ merlonghi-moa-prediction
 ├── README.md                             <- this file
 ├── software/
 │     ├── README.md                             <- setup / how-to-run instructions
-│     ├── moa-training.ipynb                    <- training and cross-validation (CV_SCHEME: hybrid / grouped / row)
+│     ├── moa-training.ipynb                    <- training and cross-validation (CV_SCHEME: hybrid / grouped / row); saved outputs: run H2
 │     ├── moa-training.pdf                      <- landscape export of the training notebook
 │     ├── moa-inference.ipynb                   <- inference and Kaggle submission
 │     ├── moa-inference.pdf                     <- landscape export of the inference notebook
-│     ├── moa-tuning.ipynb                      <- tuning v1 (row-wise folds, single stage)
-│     ├── moa-tuning.pdf                        <- landscape export of tuning v1 notebook
-│     ├── moa-tuning-row.ipynb                  <- tuning v2 (row-wise folds, two stages)
-│     ├── moa-tuning-row.pdf                    <- landscape export of tuning v2 notebook
-│     ├── moa-tuning-hybrid.ipynb               <- tuning v3 (compound-aware folds, paired seeds)
-│     ├── moa-tuning-hybrid.pdf                 <- landscape export of tuning v3 notebook
-│     ├── moa-fold-diagnostics.ipynb            <- fold and compound diagnostics of a saved run
+│     ├── moa-tuning-hybrid.ipynb               <- tuning (compound-aware folds, paired seeds)
+│     ├── moa-tuning-hybrid.pdf                 <- landscape export of the tuning notebook
+│     ├── moa-fold-diagnostics.ipynb            <- fold and compound diagnostics of saved runs
 │     ├── moa-fold-diagnostics.pdf              <- landscape export of diagnostics notebook
 │     ├── moa-blend-offline.ipynb               <- offline recombination of the OOF of two runs
 │     ├── moa-blend-offline.pdf                 <- landscape export of offline blend notebook
@@ -331,14 +385,19 @@ merlonghi-moa-prediction
 │     ├── moa-knn-override-freq-drugs.pdf       <- landscape export of offline test of the knn override notebook
 │     ├── requirements.txt                      <- python packages to install
 │     ├── requirements-frozen.txt               <- versions of the reported training run
+│     ├── cv-scheme-runs/
+│     │      ├── README.md                                  <- the three protocols run with the same code and hyperparameters
+│     │      ├── moa-training-grouped.ipynb                 <- run G3 (CV_SCHEME = "grouped", tuned hyperparameters)
+│     │      ├── moa-training-grouped.pdf                   <- landscape export of run G3
+│     │      ├── moa-training-row.ipynb                     <- run R3 (CV_SCHEME = "row", tuned hyperparameters)
+│     │      └── moa-training-row.pdf                       <- landscape export of run R3
 │     ├── ablated-models/
 │     │      ├── moa-training-with-MoAMLP.ipynb             <- training notebook version with ablated MLP
 │     │      └── moa-training-with-MoAConv1D.ipynb          <- training notebook version with ablated 1D-CNN
 │     └── hyperparameters/
-│            ├── best_hyperparameters_hybrid.json           <- JSON file for hyperparameters tuned in v3                             
-│            ├── best_hyperparameters_row.json              <- JSON file for hyperparameters tuned in v2
+│            ├── best_hyperparameters_hybrid.json           <- JSON file for the tuned hyperparameters
 │            ├── default_hyperparameters.json               <- JSON file for default hyperparameters
-│            └── README.md                                  
+│            └── README.md                                  <- which file belongs to which run
 └── doc/
       ├── moa-presentation.pdf
       └── moa-presentation.tex            <- latex beamer
