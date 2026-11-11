@@ -208,7 +208,7 @@ It takes about a minute on a GPU, needs no internet, and writes `/kaggle/working
 
    The OOF files and the other outputs of section 5 are **not** part of this Dataset; if they are saved as a separate Dataset for the analysis notebooks, do not attach it to the inference notebook (see 8.3).
 
-The artifacts used for the reported submissions (runs R and H2) are private to the author's account **[TODO: make the Dataset public or share it with the examiner, then delete this sentence]**: **[moa-artifacts](https://www.kaggle.com/datasets/marcomerlo37/moa-artifacts)**. They can be regenerated at any time by rerunning the training notebook; each run needs its own set.
+The artifacts used for the reported submissions (runs R and H2) are public and can be found at this link: **[moa-artifacts](https://www.kaggle.com/datasets/marcomerlo37/moa-artifacts)**. 
 
 ### 8.3 Run the inference notebook
 
